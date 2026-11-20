@@ -7,17 +7,29 @@ local Tracker = {}
 
 -- Active entities form an insertion-ordered linked list. Cursors and LuaObjects
 -- are saved with the map, including a partly finished reconciliation sweep.
-local function eligible(e)
-  if not e or not e.valid or not e.unit_number then return false end
-  for _, route in ipairs(storage.routes[e.force.name] or {}) do
-    if Rules.surface(route.filter, e.surface) and Rules.entity(route.filter, e) then return true end
+local function routes_for(entity)
+  if entity and entity.valid and entity.unit_number then
+    return storage.routes[entity.force.name]
   end
 end
 
+local function matches(route, entity)
+  return Rules.surface(route.filter, entity.surface) and Rules.entity(route.filter, entity)
+end
+
+local function matches_any(routes, entity)
+  for _, route in ipairs(routes) do
+    if matches(route, entity) then return true end
+  end
+  return false
+end
+
 function Tracker.observe(e)
-  if not storage.enabled or not eligible(e) then return end
+  if not storage.enabled then return end
+  local routes = routes_for(e)
+  if not routes then return end
   local id = e.unit_number
-  if storage.nodes[id] then return end
+  if storage.nodes[id] or not matches_any(routes, e) then return end
   if storage.tail then
     storage.nodes[storage.tail].next = id
   else
@@ -209,9 +221,11 @@ local function queue_chunks(p, recent, force, surface, pos, radius, discover, re
 end
 
 local function sample(p, e, recent)
+  local routes = routes_for(e)
+  if not routes then return false end
   local output = {}
-  for _, route in ipairs(storage.routes[e.force.name] or {}) do
-    if Rules.surface(route.filter, e.surface) and Rules.entity(route.filter, e) then
+  for _, route in ipairs(routes) do
+    if matches(route, e) then
       local r = route.rule
       local o = output[route.target] or { discover = -1, refresh = -1 }
       if r.discover then o.discover = math.max(o.discover, r.radius) end
@@ -238,6 +252,7 @@ local function sample(p, e, recent)
       end
     end
   end
+  return next(output) ~= nil
 end
 
 local function chart(job)
@@ -257,11 +272,13 @@ end
 local function apply_marker(key, m)
   local e = m.entity
   local f = game.forces[m.force]
+  local routes = routes_for(e)
   if
-    not eligible(e)
+    not routes
     or e.force.name ~= m.source
     or e.surface.index ~= m.surface
     or not f
+    or not matches_any(routes, e)
     or not f.is_chunk_charted(e.surface, { math.floor(m.pos.x / 32), math.floor(m.pos.y / 32) })
   then
     local old = storage.tags[key]
@@ -338,11 +355,7 @@ function Tracker.tick()
       local n = storage.nodes[id]
       p.cursor = n.next
       if id == p.last then p.cursor = nil end
-      if eligible(n.entity) then
-        sample(p, n.entity, recent)
-      else
-        forget(id, n)
-      end
+      if not sample(p, n.entity, recent) then forget(id, n) end
     elseif p.phase == "sample" then
       p.phase = "chart"
     elseif p.phase == "chart" and p.jobs[p.index] then

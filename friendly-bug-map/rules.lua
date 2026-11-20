@@ -140,10 +140,12 @@ for _, t in ipairs(Rules.types) do
   allowed[t] = true
 end
 
-function Rules.entity(f, e)
-  if not allowed[e.type] or f.exclude[e.name] then return false end
-  local cat = category[e.name] or ({ unit = "other", ["unit-spawner"] = "nests" })[e.type]
-  return f.include[e.name] or f[cat]
+local default_category = { unit = "other", ["unit-spawner"] = "nests" }
+
+function Rules.entity(filter, entity)
+  local entity_type, name = entity.type, entity.name
+  if not allowed[entity_type] or filter.exclude[name] then return false end
+  return filter.include[name] or filter[category[name] or default_category[entity_type]]
 end
 
 return Rules

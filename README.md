@@ -12,10 +12,10 @@ Admins can pin the **Bug Manager** shortcut beside the hotbar to change marker s
 
 ## Compatibility
 
-Bug Manager targets Factorio 2.1. The base game is the only requirement. Space Age is optional. With Informatron 0.5.0 or later installed, open its **Bug Manager** entry for an in-game guide. [Informatron](https://mods.factorio.com/mod/informatron)
+Bug Manager requires only base Factorio 2.1. If you use Informatron 0.5.0 or later, open its **Bug Manager** entry for the in-game guide.
 
 ## Working with the source
 
-The [friendly-bug-map](friendly-bug-map/) folder is the complete unpacked mod. The 1.3.7 development version tidies the source and keeps the tracking behaviour of 1.3.6. To test it locally, copy that folder into Factorio’s `mods` directory, using one copy of Bug Manager at a time. [Changelog](friendly-bug-map/changelog.txt)
+The [friendly-bug-map](friendly-bug-map/) folder is the complete unpacked mod. To test it locally, copy that folder into Factorio’s `mods` directory, using one copy of Bug Manager at a time. [Changelog](friendly-bug-map/changelog.txt)
 
 Created by **Killerdash117**. [MIT license](LICENSE)
