@@ -259,6 +259,10 @@ local function edit(p, r, i)
   RuleEditor.fit(p)
 end
 
+function RuleEditor.add(p)
+  edit(p, Rules.new())
+end
+
 function RuleEditor.changed()
   storage.revision = storage.revision + 1
   Tracker.reset()
@@ -349,7 +353,7 @@ function RuleEditor.click(event, status, open_marker_panel)
     return
   end
   if a == "add" then
-    edit(p, Rules.new())
+    RuleEditor.add(p)
     return
   end
   if a == "edit" then

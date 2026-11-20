@@ -56,10 +56,18 @@ local function may_locate(p, rec)
   then
     return false
   end
-  local permissions = p.permission_group or game.permissions.get_group(0)
   local pos = rec.position
-  return permissions.allows_action(defines.input_action.remote_view_surface)
-    and p.force.is_chunk_charted(p.surface, { math.floor(pos.x / 32), math.floor(pos.y / 32) })
+  return p.force.is_chunk_charted(p.surface, { math.floor(pos.x / 32), math.floor(pos.y / 32) })
+end
+
+local function refresh_locate(p, body)
+  local permissions = p.permission_group or game.permissions.get_group(0)
+  local allowed = permissions.allows_action(defines.input_action.remote_view_surface)
+  body.group_list.visible = allowed
+  body.locate.visible = allowed
+  local record = storage.tags[selected(body.group_list)]
+  body.locate.enabled = allowed and may_locate(p, record)
+  if body.locate.enabled then return record end
 end
 
 -- A refresh batch shares one census across open panels. Selections, access and
@@ -159,7 +167,7 @@ local function refresh(p, frame, teams)
   b.show.enabled = p.admin
   b.nests.state = pref.nests
   b.nests.enabled = p.admin
-  b.config.visible = p.admin
+  b.config.caption = #storage.rules == 0 and "Add first sharing rule" or "Sharing rules"
   b.preset.enabled = p.admin
   for i, name in ipairs(Display.names) do
     if name == pref.preset then
@@ -263,10 +271,7 @@ local function refresh(p, frame, teams)
   local view = team.surfaces[p.surface.index]
   choices(b.group_list, view.keys, view.names)
   b.group_list.enabled = #view.rows > 0
-  local permissions = p.permission_group or game.permissions.get_group(0)
-  b.group_list.visible = permissions.allows_action(defines.input_action.remote_view_surface)
-  b.locate.visible = b.group_list.visible
-  b.locate.enabled = may_locate(p, storage.tags[selected(b.group_list)])
+  refresh_locate(p, b)
 end
 
 local function fit(p, frame)
@@ -492,7 +497,11 @@ function Panel.event(event)
       frame.destroy()
     elseif action == "config" and p.admin then
       frame.destroy()
-      RuleEditor.list(p)
+      if #storage.rules == 0 then
+        RuleEditor.add(p)
+      else
+        RuleEditor.list(p)
+      end
     elseif action == "apply_alias" and p.admin then
       local b = frame.body
       local field = b.alias_field
@@ -523,8 +532,8 @@ function Panel.event(event)
         field.text = name
       end
     elseif action == "locate" then
-      local rec = storage.tags[selected(frame.body.group_list)]
-      if may_locate(p, rec) then
+      local rec = refresh_locate(p, frame.body)
+      if rec then
         p.set_controller {
           type = defines.controllers.remote,
           surface = rec.marker.surface,
@@ -537,11 +546,15 @@ function Panel.event(event)
     end
     return true
   end
-  local pref = Display.preferences(p.force)
-  if action == "source" or action == "group_list" or not p.admin then
+  if action == "group_list" and event.name == ev.on_gui_selection_state_changed then
+    refresh_locate(p, frame.body)
+    return true
+  end
+  if action == "source" or not p.admin then
     refresh(p, frame)
     return true
   end
+  local pref = Display.preferences(p.force)
   if event.name == ev.on_gui_checked_state_changed then
     if action == "show" then
       pref.show = el.state
