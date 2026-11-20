@@ -1,0 +1,6 @@
+*.zip
+*.log
+/saves/
+/script-output/
+/mod-list.json
+/mod-settings.dat

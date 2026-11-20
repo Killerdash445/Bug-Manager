@@ -1,0 +1,102 @@
+---------------------------------------------------------------------------------------------------
+Version: 1.3.7
+  Changes:
+    - Organise the Lua source for contributors. Tracking, settings and saved rules work as in 1.3.6.
+---------------------------------------------------------------------------------------------------
+Version: 1.3.6
+  Features:
+    - Add a Bug Manager guide to optional Informatron 0.5.0 or later. Open Informatron to read about map controls, team sharing, surface and unit filters, and missing markers.
+  Bugfixes:
+    - Changing one team's marker display no longer clears the marker-limit reports for other teams.
+---------------------------------------------------------------------------------------------------
+Version: 1.3.5
+  Features:
+    - Show group size and source name in Locate group. Larger groups appear first. Your selection follows the group when its rank changes.
+    - Tick surfaces directly in sharing rules and preview the effective filter before applying. Advanced names still support future surfaces.
+    - Show the last update age in simulation seconds, filtered sources for the receiving team and groups or individuals hidden by its surface marker cap.
+  Optimizations:
+    - Share the group list and marker census between panels refreshed together. Each player's selection and locate permissions remain independent.
+  Changes:
+    - Display the mod as Bug Manager. Existing saves, shortcuts, commands and sharing rules keep their IDs.
+---------------------------------------------------------------------------------------------------
+Version: 1.3.3
+Date: 2026-11-18
+  Optimizations:
+    - Reuse identical chart areas sampled consecutively in a tick. Queue discovery and refresh together when their radii match.
+  Changes:
+    - Keep server test fixtures, compatibility notes and documentation outside the installable archive.
+---------------------------------------------------------------------------------------------------
+Version: 1.3.2
+Date: 2026-11-18
+  Graphics:
+    - Add the Bug Tracker thumbnail for the Mod Portal and the in-game mod browser.
+---------------------------------------------------------------------------------------------------
+Version: 1.3.1
+Date: 2026-11-18
+  Features:
+    - Admins can set an optional map name for each source on their receiving team. Clearing the name restores the source team name. Grouped and individual markers respect existing label settings.
+    - Open Marker settings directly from /bug-map config, including when the native shortcut is unpinned.
+---------------------------------------------------------------------------------------------------
+Version: 1.3.0
+Date: 2026-11-18
+  Features:
+    - Every player can switch their group icons and counts on (1) or off (0) in remote view. Teammates keep their own views. Discovery, refresh and Factorio's native blips continue. The personal choice survives save/load, reconnects and team changes.
+  Changes:
+    - List Space Age as an optional dependency for the Mod Portal. Base Factorio still works independently.
+    - The personal biter button uses Factorio's bundled mod-gui toolbar. No external GUI library is required. Admins can pin the separate Bug Tracker configuration shortcut beside the hotbar to manage team settings and sharing rules.
+    - Replace owned native chart tags with player-filtered chart renderings. Each displayed group shares one rendering among eligible players. Existing routes, team preferences, terrain and player landmarks are preserved.
+---------------------------------------------------------------------------------------------------
+Version: 1.2.3
+Date: 2026-11-18
+  Bugfixes:
+    - Remove affected map tags immediately when an admin revokes a marker route or narrows its scope. Preserve unrelated tags and other receiving teams' valid routes.
+    - Reuse a displayed group's native chart tag when its members move together beyond the old grouping radius.
+  Changes:
+    - Clarify the locations of the remote-view control and the admin shortcut. Include compatibility results for Factorio 2.1.23.
+---------------------------------------------------------------------------------------------------
+Version: 1.2.2
+Date: 2026-11-18
+  Changes:
+    - Add a map-only, one-click team marker toggle for admins. Keep discovery and refresh running. Move configuration to a biter shortcut beside the item hotbar. Hide admin controls from other players.
+    - Remove the old corner button on upgrade and keep saved sharing rules and display preferences.
+---------------------------------------------------------------------------------------------------
+Version: 1.2.1
+Date: 2026-11-18
+  Bugfixes:
+    - Fit the rule editor to the player's resolution and UI scale. Long rule summaries wrap above their action buttons.
+    - Use Factorio's normal window handling for the marker panel. Show the receiving team, update status and admin configuration near the top.
+    - List only sources with an active marker output. Show an explicit empty state when no rules supply team icons.
+    - Ignore other mods' settings and GUI buttons even if they use similar names.
+    - Include reset-ui in command help and explain its in-game scope to the server console.
+---------------------------------------------------------------------------------------------------
+Version: 1.2.0
+Date: 2026-11-18
+  Features:
+    - Open a team marker panel from the native mod toolbar. Admins can hide the team's icons, filter individual sources and nests, or choose a labelled display preset.
+    - Inspect icon counts and update status, locate a charted group on the current surface and reset the panel with /bug-map reset-ui.
+    - New installations start without sharing rules. Admins select the source and receiving teams in Add rule. Upgrades retain the save's existing rules, including rules waiting for a missing team.
+  Compatibility:
+    - Existing saves inherit the server's display settings until an admin chooses a team override. No additional mods are required.
+---------------------------------------------------------------------------------------------------
+Version: 1.1.1
+Date: 2026-11-18
+  Changes:
+    - Use Bug Tracker throughout the interface, with Killerdash117 credited as author. Keep the original mod ID and commands.
+  Bugfixes:
+    - Allow an admin to turn off a rule's entity filter override after a mod supplying a listed prototype has been removed. Active overrides still validate every prototype name.
+---------------------------------------------------------------------------------------------------
+Version: 1.1.0
+Date: 2026-11-18
+  Features:
+    - Group nearby charted bugs across grid boundaries. Choose a representative near the centre and retain group identity across small movements.
+    - Prioritise the largest groups per receiving force and surface. Status now reports grouped bug contributions and groups hidden by the cap.
+    - Add a server-wide marker switch. Turning it off removes owned tags while discovery and refresh continue.
+  Changes:
+    - Fresh configurations show source names and counts and display up to 32 markers per receiver and surface. Labels use forms such as "237 bugs" and "1 nest".
+    - Reuse a group's tag when the representative or its species changes. Rank candidates and select representatives over successive ticks.
+  Compatibility:
+    - Upgrades from 1.0.0 retain saved rules, settings, marker ownership and chart data. The existing cell width becomes the proximity distance.
+---------------------------------------------------------------------------------------------------
+Version: 1.0.0
+  Features:
+    - Initial release with configurable force sharing, bug tracking, charting and map tags.
