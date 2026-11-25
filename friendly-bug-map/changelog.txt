@@ -1,4 +1,21 @@
 ---------------------------------------------------------------------------------------------------
+Version: 1.3.12
+  Gui:
+    - The marker panel groups team status, group search and administration into separate sections. Locate and Apply name sit beside the controls they act on.
+    - Sharing rules have distinct name, direction and action rows. The editor pairs the source and receiving teams, groups map outputs, and keeps the preview and Apply button below the scrolling form.
+    - Windows from older layouts close once on upgrade. Existing rules, preferences and shortcut assignments carry forward.
+---------------------------------------------------------------------------------------------------
+Version: 1.3.11
+  Bugfixes:
+    - The group finder clears inaccessible results and follows surface changes. Searching and locating groups respect the receiving team's current chart.
+    - Disabled platform and sandbox exclusions now show the active map defaults. Re-enabling a rule's override restores its own choices.
+---------------------------------------------------------------------------------------------------
+Version: 1.3.10
+  Changes:
+    - The personal map button shows a plain biter for details on and a crossed-out biter for details off. Hover to see what the next click will do.
+    - Group search now names the viewed surface. Admins can expand team display settings below the group finder. The panel remembers this choice for each admin.
+    - The optional Informatron guide now illustrates both map states and walks through first-time setup, team presets, source names, surface filters and missing markers.
+---------------------------------------------------------------------------------------------------
 Version: 1.3.9
   Changes:
     - Choose teams and sharing direction first. Review outputs and radius before applying. Advanced filters show inherited creature settings and preserve custom choices.

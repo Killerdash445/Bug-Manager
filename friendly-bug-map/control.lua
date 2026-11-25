@@ -46,7 +46,7 @@ script.on_configuration_changed(function(event)
   if change and change.old_version ~= change.new_version then
     for _, p in pairs(game.players) do
       local frame = p.gui.screen.fbm_window
-      if frame and frame.error and not frame.preview then RuleEditor.close(p) end
+      if frame and not frame.action_bar then RuleEditor.close(p) end
     end
   end
   RuleEditor.changed()
@@ -247,6 +247,7 @@ script.on_event({
   ev.on_player_created,
   ev.on_player_joined_game,
   ev.on_player_changed_force,
+  ev.on_player_changed_surface,
   ev.on_player_controller_changed,
   ev.on_player_promoted,
   ev.on_player_display_resolution_changed,
@@ -279,6 +280,7 @@ end)
 script.on_event(ev.on_player_removed, function(e)
   storage.editors[e.player_index] = nil
   storage.quick_help[e.player_index] = nil
+  storage.expanded_team_settings[e.player_index] = nil
   storage.hidden_details[e.player_index] = nil
   for _, f in pairs(game.forces) do
     Markers.refresh_audience(f)

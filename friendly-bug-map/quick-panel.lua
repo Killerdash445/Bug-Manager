@@ -38,40 +38,37 @@ local function selected(menu)
   return (menu.tags.keys or {})[menu.selected_index]
 end
 
-local function may_locate(p, rec)
+local function charted_group(force, surface, rec)
   if not rec or not rec.group or not rec.marker.valid then return false end
-  local tag = rec.marker
-  if rec.force ~= p.force or tag.surface ~= p.surface or p.force.get_surface_hidden(p.surface) then
-    return false
-  end
-  if
-    p.controller_type ~= defines.controllers.remote
-    and p.controller_type ~= defines.controllers.character
-  then
-    return false
-  end
+  if rec.force ~= force or rec.marker.surface ~= surface then return false end
   local pos = rec.position
-  return p.force.is_chunk_charted(p.surface, { math.floor(pos.x / 32), math.floor(pos.y / 32) })
+  return force.is_chunk_charted(surface, { math.floor(pos.x / 32), math.floor(pos.y / 32) })
 end
 
-local function refresh_locate(p, body)
+local function can_search(p)
   local permissions = p.permission_group or game.permissions.get_group(0)
-  local allowed = permissions.allows_action(defines.input_action.remote_view_surface)
-  body.group_search.visible = allowed
-  body.search_label.visible = allowed
-  body.group_list.visible = allowed
-  body.locate.visible = allowed
-  local record = storage.tags[selected(body.group_list)]
-  body.locate.enabled = allowed and may_locate(p, record)
-  if body.locate.enabled then return record end
+  return permissions.allows_action(defines.input_action.remote_view_surface)
+    and not p.force.get_surface_hidden(p.surface)
 end
 
-local function group_choices(query, keys, aliases)
+local function refresh_locate(p, body, allowed)
+  if allowed == nil then allowed = can_search(p) end
+  body.visible = allowed
+  local record = storage.tags[selected(body.actions.group_list)]
+  local controller = p.controller_type
+  body.actions.locate.enabled = allowed
+    and (controller == defines.controllers.remote or controller == defines.controllers.character)
+    and charted_group(p.force, p.surface, record)
+  if body.actions.locate.enabled then return record end
+end
+
+local function group_choices(query, keys, force, surface)
+  local aliases = Display.preferences(force).aliases
   local result = { keys = { "" }, labels = { L("choose-group") }, signatures = { "choose" } }
   local duplicates = {}
   for _, key in ipairs(keys) do
     local rec = storage.tags[key]
-    if rec and rec.marker.valid then
+    if charted_group(force, surface, rec) then
       local source = rec.source or ""
       local alias = aliases[source] or source
       if
@@ -106,15 +103,22 @@ local function group_choices(query, keys, aliases)
 end
 
 local function show_groups(p, body, keys, cache)
+  local allowed = can_search(p)
+  if not allowed then
+    choices(body.actions.group_list, { "" }, { L("choose-group") }, { "choose" })
+    body.actions.group_list.enabled = false
+    refresh_locate(p, body, false)
+    return
+  end
   local query = body.group_search.text:lower():match("^%s*(.-)%s*$")
   local items = cache and cache[query]
   if not items then
-    items = group_choices(query, keys, Display.preferences(p.force).aliases)
+    items = group_choices(query, keys, p.force, p.surface)
     if cache then cache[query] = items end
   end
-  choices(body.group_list, items.keys, items.labels, items.signatures)
-  body.group_list.enabled = #items.keys > 1
-  refresh_locate(p, body)
+  choices(body.actions.group_list, items.keys, items.labels, items.signatures)
+  body.actions.group_list.enabled = #items.keys > 1
+  refresh_locate(p, body, true)
 end
 
 -- A refresh batch shares one census across open panels. Selections, access and
@@ -178,35 +182,23 @@ local function refresh(p, frame, teams)
   local team = (teams or panel_views({ p }))[p.force.index]
   local pref = Display.preferences(p.force)
   frame.header.heading.caption = p.admin and L("config-title") or L("title")
-  for _, name in ipairs({
-    "show",
-    "config",
-    "source_label",
-    "source",
-    "include",
-    "alias_label",
-    "alias_field",
-    "apply_alias",
-    "nests",
-    "preset_label",
-    "preset",
-    "settings",
-    "filters_line",
-  }) do
-    b[name].visible = p.admin
-  end
-  frame.tags = { force = p.force.index }
-  b.team.caption = L("receiving-team", p.force.name)
-  b.team.tooltip = p.force.name
-  b.show.state = pref.show
-  b.show.enabled = p.admin
-  b.nests.state = pref.nests
-  b.nests.enabled = p.admin
-  b.config.caption = #storage.rules == 0 and L("first-rule") or L("sharing-rules")
-  b.preset.enabled = p.admin
+  local overview, finder, admin = b.overview, b.finder, b.admin
+  local options = admin.options
+  admin.visible = p.admin
+  admin.team_options.state = storage.expanded_team_settings[p.index] == true
+  options.visible = p.admin and admin.team_options.state
+  frame.tags = { force = p.force.index, surface = p.surface.index }
+  overview.head.team.caption = L("receiving-team", p.force.name)
+  overview.head.team.tooltip = p.force.name
+  options.show.state = pref.show
+  options.show.enabled = p.admin
+  options.nests.state = pref.nests
+  options.nests.enabled = p.admin
+  admin.bar.config.caption = #storage.rules == 0 and L("first-rule") or L("sharing-rules")
+  options.preset.enabled = p.admin
   for i, name in ipairs(Display.names) do
     if name == pref.preset then
-      if b.preset.selected_index ~= i then b.preset.selected_index = i end
+      if options.preset.selected_index ~= i then options.preset.selected_index = i end
       break
     end
   end
@@ -215,7 +207,7 @@ local function refresh(p, frame, teams)
   if style.team then labels[#labels + 1] = L("label-source") end
   if style.count then labels[#labels + 1] = L("label-count") end
   if style.kind then labels[#labels + 1] = L("label-type") end
-  b.settings.caption = L(
+  options.settings.caption = L(
     "display-settings",
     style.group and L("grouped") or L("individual"),
     style.cap,
@@ -231,37 +223,37 @@ local function refresh(p, frame, teams)
   end
   local pass = storage.pass
   if not storage.enabled then
-    b.update.caption = L("updates-paused")
+    overview.update.caption = L("updates-paused")
   elseif
     pass
     and (
       game.tick > storage.next_chart or (Rules.option("show") and game.tick > storage.next_marker)
     )
   then
-    b.update.caption = L("update-delayed", L("phase-" .. pass.phase))
+    overview.update.caption = L("update-delayed", L("phase-" .. pass.phase))
   elseif pass then
-    b.update.caption = L("updating", L("phase-" .. pass.phase))
+    overview.update.caption = L("updating", L("phase-" .. pass.phase))
   else
-    b.update.caption = ""
+    overview.update.caption = ""
   end
   if storage.enabled then
     local age = storage.last_update
         and L("update-age", math.floor((game.tick - storage.last_update) / 60))
       or L("waiting")
-    b.update.caption = pass and L("pair", b.update.caption, age) or age
+    overview.update.caption = pass and L("pair", overview.update.caption, age) or age
   end
   local sources = team.sources
   if #sources == 0 and state == "icons-on" then state = "no-incoming" end
   if state == "icons-on" and storage.hidden_details[p.index] then state = "personal-off" end
-  b.visibility.caption = L(state)
+  overview.head.visibility.caption = L(state)
   if #sources == 0 then
-    choices(b.source, { "" }, { L("no-active-sources") })
+    choices(options.source, { "" }, { L("no-active-sources") })
   else
-    choices(b.source, sources, sources)
+    choices(options.source, sources, sources)
   end
-  b.source.enabled = #sources > 0
-  local source = selected(b.source)
-  local field = b.alias_field
+  options.source.enabled = #sources > 0
+  local source = selected(options.source)
+  local field = options.alias_row.alias_field
   local draft = field.tags
   local saved = pref.aliases[source] or ""
   -- Periodic refresh must preserve a draft for the same source and receiver.
@@ -274,9 +266,9 @@ local function refresh(p, frame, teams)
     field.tags = { force = p.force.index, source = source, saved = saved }
   end
   field.enabled = p.admin and #sources > 0
-  b.apply_alias.enabled = field.enabled
-  b.include.enabled = p.admin and #sources > 0
-  b.include.state = #sources > 0 and not pref.excluded[source]
+  options.alias_row.apply_alias.enabled = field.enabled
+  options.include.enabled = p.admin and #sources > 0
+  options.include.state = #sources > 0 and not pref.excluded[source]
   local filtered = {}
   for _, name in ipairs(sources) do
     if pref.excluded[name] then filtered[#filtered + 1] = name end
@@ -291,27 +283,56 @@ local function refresh(p, frame, teams)
     reasons[#reasons + 1] =
       L(style.group and "hidden-groups" or "hidden-markers", hidden, p.surface.name)
   end
-  b.reasons.caption = Text.join(reasons, "\n")
-  b.reasons.visible = #reasons > 0
-  b.count.caption = L("team-count", team.groups, team.total)
+  overview.reasons.caption = Text.join(reasons, "\n")
+  overview.reasons.visible = #reasons > 0
+  overview.count.caption = L("team-count", team.groups, team.total)
   local view = team.surfaces[p.surface.index]
-  local search = b.group_search
+  finder.search_label.caption = L("surface-search", p.surface.name)
+  finder.search_label.tooltip = p.surface.name
+  local search = finder.group_search
   if not Text.same(search.tags.keys, view.keys) then
     search.tags = { fbm_quick = "group_search", keys = view.keys }
   end
-  show_groups(p, b, view.keys, view.searches)
+  show_groups(p, finder, view.keys, view.searches)
+end
+
+local function stretch(el)
+  el.style.horizontally_stretchable = true
+  return el
+end
+
+local function section(parent, name)
+  local frame = stretch(parent.add {
+    type = "frame",
+    name = name,
+    direction = "vertical",
+    style = "inside_shallow_frame_with_padding",
+  })
+  frame.style.bottom_margin = 4
+  return frame
 end
 
 local function fit(p, frame)
-  local size = p.display_resolution
-  frame.body.style.maximal_height = math.max(100, math.floor(size.height / p.display_scale) - 110)
-  local width = math.min(360, math.max(180, math.floor(size.width / p.display_scale) - 76))
-  frame.body.team.style.maximal_width = width
-  frame.body.source.style.maximal_width = width
-  frame.body.group_search.style.maximal_width = width
-  frame.body.group_list.style.maximal_width = width
-  frame.body.reasons.style.maximal_width = width
-  frame.body.update.style.maximal_width = width
+  local b = frame.body
+  local size, scale = p.display_resolution, p.display_scale
+  local width = math.min(440, math.max(180, math.floor(size.width / scale) - 70))
+  b.style.width = width
+  b.style.maximal_height = math.max(100, math.floor(size.height / scale) - 100)
+  local inner = width - 46
+  local overview, finder, options = b.overview, b.finder, b.admin.options
+  for _, label in ipairs({
+    overview.update,
+    overview.reasons,
+    options.settings,
+    finder.search_label,
+  }) do
+    label.style.maximal_width = inner
+  end
+  overview.head.team.style.maximal_width = math.floor(inner / 2)
+  overview.head.visibility.style.maximal_width = math.floor(inner / 2) - 8
+  for _, row in ipairs({ overview.head, finder.actions, b.admin.bar, options.alias_row }) do
+    row.style.horizontal_spacing = 6
+  end
 end
 
 local function open(p)
@@ -335,65 +356,80 @@ local function open(p)
     direction = "vertical",
     horizontal_scroll_policy = "never",
   }
-  b.add { type = "label", name = "team", style = "heading_2_label" }
-  b.add { type = "label", name = "visibility" }
-  add(b, "show", { type = "checkbox", caption = L("team-icons"), state = true, tooltip = scope })
-  b.add { type = "label", name = "count" }
-  b.add { type = "label", name = "update" }
-  b.update.style.single_line = false
-  b.add { type = "label", name = "reasons" }.style.single_line = false
-  add(b, "config", { type = "button", caption = L("sharing-rules") })
+  local overview = section(b, "overview")
+  local head = stretch(overview.add { type = "flow", name = "head" })
+  head.style.vertical_align = "center"
+  stretch(head.add { type = "label", name = "team", style = "heading_2_label" })
+  head.add { type = "label", name = "visibility", style = "semibold_label" }.style.single_line =
+    false
+  overview.add { type = "label", name = "count" }
+  overview.add { type = "label", name = "update" }.style.single_line = false
+  overview.add { type = "label", name = "reasons" }.style.single_line = false
   if not storage.quick_help[p.index] then
-    local hint = b.add { type = "label", caption = L("personal-hint") }
+    local hint = overview.add { type = "label", caption = L("personal-hint") }
     hint.style.single_line = false
-    hint.style.maximal_width = 265
+    hint.style.horizontally_squashable = true
     storage.quick_help[p.index] = true
   end
-  b.add { type = "label", name = "search_label", caption = L("search-groups") }
-  add(b, "group_search", { type = "textfield", text = "", tooltip = L("search-help") })
-  add(b, "group_list", { type = "drop-down", items = {} })
-  add(b, "locate", {
-    type = "button",
-    caption = L("locate"),
-    tooltip = L("locate-help"),
-  })
-  b.add { type = "line", name = "filters_line" }
-  b.add { type = "label", name = "source_label", caption = L("source-team") }
-  add(b, "source", { type = "drop-down", items = {} })
-  b.add { type = "label", name = "alias_label", caption = L("alias") }
-  b.add {
-    type = "textfield",
-    name = "alias_field",
-    text = "",
-    tooltip = L("alias-hint"),
-  }
-  add(b, "apply_alias", { type = "button", caption = L("apply-name") })
-  add(b, "include", {
-    type = "checkbox",
-    caption = L("include-source"),
-    state = true,
-    tooltip = scope,
-  })
-  add(b, "nests", {
-    type = "checkbox",
-    caption = L("show-nests"),
-    state = true,
-    tooltip = L("nests-hint"),
-  })
-  b.add { type = "label", name = "preset_label", caption = L("preset") }
-  add(b, "preset", {
+
+  local finder = section(b, "finder")
+  finder.add { type = "label", name = "search_label", style = "heading_2_label" }
+  stretch(
+    add(finder, "group_search", { type = "textfield", text = "", tooltip = L("search-help") })
+  )
+  local actions = stretch(finder.add { type = "flow", name = "actions" })
+  local groups = stretch(add(actions, "group_list", { type = "drop-down", items = {} }))
+  groups.style.minimal_width = 80
+  add(actions, "locate", { type = "button", caption = L("locate"), tooltip = L("locate-help") })
+
+  local admin = section(b, "admin")
+  local bar = stretch(admin.add { type = "flow", name = "bar" })
+  bar.style.vertical_align = "center"
+  stretch(bar.add { type = "label", caption = L("admin-heading"), style = "heading_2_label" })
+  add(bar, "config", { type = "button", caption = L("sharing-rules") })
+  add(
+    admin,
+    "team_options",
+    { type = "checkbox", caption = L("team-options"), state = false, tooltip = scope }
+  )
+  local options = stretch(admin.add { type = "flow", name = "options", direction = "vertical" })
+  options.style.vertical_spacing = 4
+  options.add { type = "line" }
+  add(
+    options,
+    "show",
+    { type = "checkbox", caption = L("team-icons"), state = true, tooltip = scope }
+  )
+  add(
+    options,
+    "nests",
+    { type = "checkbox", caption = L("show-nests"), state = true, tooltip = L("nests-hint") }
+  )
+  options.add { type = "label", caption = L("preset"), style = "semibold_label" }
+  stretch(add(options, "preset", {
     type = "drop-down",
-    items = {
-      L("preset-server"),
-      L("preset-minimal"),
-      L("preset-balanced"),
-      L("preset-detailed"),
-    },
-  })
-  b.add { type = "label", name = "settings" }
+    items = { L("preset-server"), L("preset-minimal"), L("preset-balanced"), L("preset-detailed") },
+  }))
+  options.add { type = "label", name = "settings" }.style.single_line = false
+  options.add { type = "line" }
+  options.add { type = "label", caption = L("source-team"), style = "semibold_label" }
+  stretch(add(options, "source", { type = "drop-down", items = {} }))
+  add(
+    options,
+    "include",
+    { type = "checkbox", caption = L("include-source"), state = true, tooltip = scope }
+  )
+  options.add { type = "label", caption = L("alias"), style = "semibold_label" }
+  local alias_row = stretch(options.add { type = "flow", name = "alias_row" })
+  local alias = stretch(
+    alias_row.add { type = "textfield", name = "alias_field", text = "", tooltip = L("alias-hint") }
+  )
+  alias.style.minimal_width = 70
+  add(alias_row, "apply_alias", { type = "button", caption = L("apply-name") })
   fit(p, frame)
   refresh(p, frame)
   p.opened = frame
+  frame.auto_center = true
   frame.force_auto_center()
 end
 
@@ -427,14 +463,14 @@ local function sync_map_button(p)
       type = "sprite-button",
       name = map_button,
       style = mod_gui.button_style,
-      sprite = "entity/small-biter",
       tags = { fbm_quick = "map_visibility" },
     }
   end
   local shown = not storage.hidden_details[p.index]
-  local indicator = shown and 1 or 0
-  if button.number ~= indicator or type(button.tooltip) ~= "table" then
-    button.number = indicator
+  local sprite = shown and "entity/small-biter" or "fbm-map-details-hidden"
+  if button.sprite ~= sprite or button.number ~= nil then
+    button.number = nil
+    button.sprite = sprite
     button.toggled = shown
     button.tooltip = shown and L("hide-details") or L("show-details")
   end
@@ -463,6 +499,7 @@ end
 function Panel.init(replace_old_panels)
   storage.displays = storage.displays or {}
   storage.quick_help = storage.quick_help or {}
+  storage.expanded_team_settings = storage.expanded_team_settings or {}
   for _, p in pairs(game.players) do
     -- Older releases used Factorio's shared mod toolbar. Leave its other buttons alone.
     local top = p.gui.top
@@ -473,7 +510,7 @@ function Panel.init(replace_old_panels)
     local old_button = flow and flow.fbm_quick_button
     if old_button and old_button.get_mod() == script.mod_name then old_button.destroy() end
     local frame = p.gui.screen[window]
-    if frame and (replace_old_panels or not frame.body or not frame.body.group_search) then
+    if frame and (replace_old_panels or not frame.body or not frame.body.overview) then
       frame.destroy()
     end
     Panel.sync(p)
@@ -513,18 +550,20 @@ function Panel.event(event)
       storage.hidden_details[p.index] = not storage.hidden_details[p.index] or nil
       Markers.refresh_audience(p.force)
       sync_map_button(p)
+      local frame = p.gui.screen[window]
+      if frame then refresh(p, frame) end
     end
     return true
   end
   local frame = p.gui.screen[window]
   local ev = defines.events
   if not frame then return true end
-  if frame.tags.force ~= p.force.index then
+  if frame.tags.force ~= p.force.index or frame.tags.surface ~= p.surface.index then
     refresh(p, frame)
     return true
   end
   if action == "group_search" and event.name == ev.on_gui_text_changed then
-    show_groups(p, frame.body, el.tags.keys or {})
+    show_groups(p, frame.body.finder, el.tags.keys or {})
     return true
   end
   if event.name == ev.on_gui_click then
@@ -538,8 +577,8 @@ function Panel.event(event)
         RuleEditor.list(p)
       end
     elseif action == "apply_alias" and p.admin then
-      local b = frame.body
-      local field = b.alias_field
+      local b = frame.body.admin.options
+      local field = b.alias_row.alias_field
       local source = selected(b.source)
       local draft = field.tags
       if not source or source == "" or draft.force ~= p.force.index or draft.source ~= source then
@@ -567,7 +606,7 @@ function Panel.event(event)
         field.text = name
       end
     elseif action == "locate" then
-      local rec = refresh_locate(p, frame.body)
+      local rec = refresh_locate(p, frame.body.finder)
       if rec then
         p.set_controller {
           type = defines.controllers.remote,
@@ -582,11 +621,17 @@ function Panel.event(event)
     return true
   end
   if action == "group_list" and event.name == ev.on_gui_selection_state_changed then
-    refresh_locate(p, frame.body)
+    refresh_locate(p, frame.body.finder)
     return true
   end
   if action == "source" or not p.admin then
     refresh(p, frame)
+    return true
+  end
+  if action == "team_options" and event.name == ev.on_gui_checked_state_changed then
+    storage.expanded_team_settings[p.index] = el.state or nil
+    refresh(p, frame)
+    if el.state then frame.force_auto_center() end
     return true
   end
   local pref = Display.preferences(p.force)
@@ -596,7 +641,7 @@ function Panel.event(event)
     elseif action == "nests" then
       pref.nests = el.state
     elseif action == "include" then
-      local source = selected(frame.body.source)
+      local source = selected(frame.body.admin.options.source)
       if not source or source == "" then return true end
       pref.excluded[source] = not el.state or nil
     else
