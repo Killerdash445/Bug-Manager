@@ -1,54 +1,61 @@
-<p align="center">
-  <img src="friendly-bug-map/thumbnail.png" width="112" height="112" alt="Bug Manager mod icon">
-</p>
-
-<h1 align="center">Bug Manager</h1>
+<h1 align="center">
+  <img src="docs/images/bug-manager-banner.jpg" width="100%" alt="Bug Manager">
+</h1>
 
 <p align="center">
-  Follow friendly swarms across the Factorio map and share the terrain they discover with the teams you choose.
-</p>
-
-<p align="center">
-  <strong>Source version</strong> <code>1.3.9</code> &nbsp;·&nbsp;
-  <strong>Factorio</strong> <code>2.1</code> &nbsp;·&nbsp;
-  <strong>License</strong> <a href="LICENSE">MIT</a>
+  Follow friendly swarms on the Factorio map and share the terrain they discover with the teams you choose.
 </p>
 
 <p align="center">
-  <a href="https://mods.factorio.com/mod/friendly-bug-map">Install from the Mod Portal</a>
+  <strong>Source version</strong> <a href="friendly-bug-map/info.json"><code>1.3.9</code></a>
+  &nbsp;·&nbsp; <strong>Factorio</strong> <code>2.1</code>
+  &nbsp;·&nbsp; <strong>License</strong> <a href="LICENSE">MIT</a>
+</p>
+
+<p align="center">
+  <strong><a href="https://mods.factorio.com/mod/friendly-bug-map">Get Bug Manager on the Mod Portal</a></strong>
+  &nbsp;·&nbsp; <a href="#set-up-team-sharing">Quick setup</a>
   &nbsp;·&nbsp; <a href="friendly-bug-map/changelog.txt">Changelog</a>
-  &nbsp;·&nbsp; <a href="#working-with-the-source">Contributor guide</a>
 </p>
 
 ## On the map
 
-A swarm of 237 nearby bugs can appear as a single marker labelled **Fox Swarm: 237 bugs**. Larger groups take priority when the map reaches its marker limit. Bugs outside that limit can still reveal terrain. Tracking leaves the swarm under its existing orders.
+A single marker can read **Fox Swarm: 237 bugs**. Nearby bugs share an icon, larger groups take priority, and eligible bugs beyond the marker limit can still reveal terrain. The swarm keeps its existing orders.
 
-| Control | Who can use it | What it does |
-| --- | --- | --- |
-| Biter button in the map toolbar | Every player in remote view | **1** shows group icons and counts. **0** hides them for you. Your choice is saved. Teammates keep their own views, discovery continues and ordinary map blips stay visible. |
-| **Find a group** in the marker panel | Players with remote-view permission | Search the current surface by source team or custom map name. Select a result and click **Locate group** to centre the map on its last charted position. Open the panel with `/bug-map reset-ui`. |
-| **Bug Manager** shortcut beside the hotbar | Admins | Set team marker visibility, filter sources, name swarms and manage sharing rules. Pin the shortcut from the **⋮** menu beside the hotbar. |
+| What you want to do | Where to find it |
+| --- | --- |
+| **Hide details on your map** | In remote view, click the **biter** in the map toolbar. **1** shows icons and counts. **0** hides them for you. Your choice survives reconnects. Teammates keep their own views, and discovery and ordinary map blips continue. |
+| **Find a particular swarm** | Open the marker panel with `/bug-map reset-ui`. Type a source team or its map name in **Find a group**, select a result, then click **Locate group**. Results are on your current surface and respect remote-view permissions. |
+| **Configure your team’s map** | As an admin, click **Bug Manager** beside the hotbar. Choose the source teams to display, name their swarms or edit sharing rules. Use the **⋮** menu beside the hotbar to pin the shortcut. |
+
+<p align="center">
+  <a href="docs/images/group-search.png"><img src="docs/images/group-search.png" width="390" alt="Group finder showing two groups and the selected source team's map name, Fox Swarm"></a>
+  <a href="docs/images/sharing-rule.png"><img src="docs/images/sharing-rule.png" width="390" alt="Sharing-rule editor previewing a one-way rule with icons, discovery, map refresh and a 16-tile radius"></a>
+</p>
+
+<p align="center">
+  Open the <a href="docs/images/group-search.png">group finder</a> or the <a href="docs/images/sharing-rule.png">sharing-rule editor</a> at full size.
+</p>
 
 ## Set up team sharing
 
-1. Install **Bug Manager** from Factorio’s mod browser. On a multiplayer server, use the same game version and enabled mod versions on the server and joining clients.
-2. As an admin, open the hotbar shortcut and choose **Add first sharing rule**. For another rule, choose **Sharing rules → Add rule**. You can also open the rule list with `/bug-map config`.
-3. Select the **Source force** that owns the bugs and the **Receiving force** that should see their information. Choose markers, terrain discovery, map refresh or any combination. Check the direction and radius in the preview, then click **Apply**.
+1. **Install the mod.** Find **Bug Manager** in Factorio’s mod browser. Use the same game version and enabled mod versions on the server and joining clients.
+2. **Choose the teams.** As an admin, open the hotbar shortcut and select **Add first sharing rule**. Pick the **Source force** that owns the bugs and the **Receiving force** that should see their information. To add another rule, use **Sharing rules → Add rule**, or open the list with `/bug-map config`.
+3. **Choose what to share.** Enable markers, terrain discovery, map refresh or any combination. Read the direction and radius in the preview, then click **Apply**.
 
-For example, a one-way rule from **Swarm → Builders** lets Builders follow Swarm’s bugs. Enable **Share in both directions** to let Swarm follow eligible bugs owned by Builders as well. New saves start with an empty rule list, and admins choose from the teams in their own save.
+> **Example** · With **Swarm → Builders**, Builders can follow Swarm’s bugs. Tick **Share in both directions** if Swarm should also receive map information from Builders’ eligible bugs.
 
-Open **Advanced filters** to choose creatures or surfaces for one rule. Disabled creature checkboxes show the map defaults. Enable **Override default entity filters** to edit them. In marker settings, leave **Map name** blank to display the source team’s actual name.
+New saves start with an empty rule list. Under **Advanced filters**, the disabled creature checkboxes show the server defaults. Enable **Override default entity filters** to choose different creatures for this rule. In marker settings, leave **Map name** blank to display the source team’s actual name.
 
 ## Multiplayer and upgrades
 
-Base Factorio 2.1 is the only requirement. If you use Informatron 0.5.0 or later, open its **Bug Manager** entry for the in-game guide. Markers and terrain refresh periodically. Discovered terrain persists after a swarm moves on, and zoomed-in remote viewing follows Factorio’s normal live-visibility rules.
+Base Factorio 2.1 is the only requirement. If you use Informatron 0.5.0 or later, open its **Bug Manager** entry for the in-game guide. Markers and terrain update periodically. Discovered terrain stays on the map after a swarm moves away. Zoomed-in remote viewing follows Factorio’s normal live-visibility rules.
 
-Back up the server save before upgrading. Version **1.3.9** was tested on **Factorio 2.1.23** with one graphical client connected to a 75-mod dedicated server. Direct upgrade and restart checks passed from all 16 earlier tracking builds, including the published 1.3.8 package.
+Back up the server save before upgrading. Version **1.3.9** was tested on **Factorio 2.1.23** with one graphical client connected to a 75-mod dedicated server. Direct upgrades and restarts passed from all 16 earlier tracking builds, including 1.3.8.
 
 ## Working with the source
 
-- **Run a development copy.** Copy the `friendly-bug-map/` folder into Factorio’s `mods/` directory and use one copy of Bug Manager at a time. Keep the internal name `friendly-bug-map` so Factorio recognises the mod in existing saves. [Mod source](friendly-bug-map/) · [Version and dependencies](friendly-bug-map/info.json)
-- **Contribute a translation.** Copy the English locale files into `locale/<language-code>/` inside the mod. Translate the text on the right of each `=` and preserve keys and placeholders such as `__1__`. [English locale files](friendly-bug-map/locale/en/)
+- **Run a development copy.** Copy `friendly-bug-map/` into Factorio’s `mods/` directory and use one copy of Bug Manager at a time. Keep the internal name `friendly-bug-map` so existing saves recognise it. [Mod source](friendly-bug-map/) · [Version and dependencies](friendly-bug-map/info.json)
+- **Contribute a translation.** Copy the English locale files into `locale/<language-code>/` inside the mod. Translate the values after each `=` and preserve keys and placeholders such as `__1__`. [English locale files](friendly-bug-map/locale/en/)
 
 Created by **Killerdash117**.
