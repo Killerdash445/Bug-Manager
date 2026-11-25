@@ -1,10 +1,15 @@
 ---------------------------------------------------------------------------------------------------
+Version: 1.3.9
+  Changes:
+    - Choose teams and sharing direction first. Review outputs and radius before applying. Advanced filters show inherited creature settings and preserve custom choices.
+    - Find a group on the current surface by typing its source team or custom map name. Locate keeps its normal permission and chart checks.
+    - The main interface, settings, shortcut, commands and map labels now use English locale entries that contributors can translate.
+    - On an empty save, admins can open their first sharing rule directly from the hotbar panel. Selecting a group checks only that group's location and permissions.
+---------------------------------------------------------------------------------------------------
 Version: 1.3.8
   Changes:
-    - On a save with no sharing rules, admins can open the first rule directly from the hotbar configuration panel.
     - List optional mods tested with Bug Manager's unit, vehicle and surface filters. Base Factorio remains the only requirement.
   Optimizations:
-    - Selecting a group checks its location and permissions without rebuilding the entire group list.
     - Check each sharing rule once per bug during sampling. Skip repeat filter checks for bugs already indexed during reconciliation.
 ---------------------------------------------------------------------------------------------------
 Version: 1.3.7

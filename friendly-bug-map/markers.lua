@@ -1,3 +1,4 @@
+local Text = require("ui-text")
 -- A single chart rendering represents one capped group or individual. Factorio
 -- interprets an empty player filter as everyone, so hide an empty audience.
 local Markers = {}
@@ -49,13 +50,13 @@ function Markers.update(key, m, force, entity, label)
       rec.marker.target = pos
       rec.position = pos
     end
-    if rec.icon == entity.name and rec.label == label then
+    if rec.icon == entity.name and Text.same(rec.label, label) then
       rec.representative = m.representative
       return
     end
   end
   local text = "[img=entity/" .. entity.name .. "]"
-  if label ~= "" then text = text .. " " .. label end
+  if label ~= "" then text = { "", text, " ", label } end
   if rec and rec.marker.valid then
     rec.marker.text = text
   else

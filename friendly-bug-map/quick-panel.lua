@@ -1,3 +1,5 @@
+local Text = require("ui-text")
+local L = Text.get
 local Display = require("display")
 local Rules = require("rules")
 local Tracker = require("tracker")
@@ -8,8 +10,7 @@ local mod_gui = require("__core__/lualib/mod-gui")
 local Panel = {}
 local window = "fbm_quick_panel"
 local map_button = "fbm_map_visibility"
-local scope = "Admins change Bug Manager markers for every member of this receiving team. "
-  .. "Terrain discovery and map refresh follow the sharing rules."
+local scope = L("team-scope")
 
 local function add(parent, action, spec)
   spec.name = action
@@ -17,19 +18,12 @@ local function add(parent, action, spec)
   return parent.add(spec)
 end
 
-local function same(a, b)
-  if #a ~= #b then return false end
-  for i, v in ipairs(a) do
-    if v ~= b[i] then return false end
-  end
-  return true
-end
-
 -- Keep an open drop-down and its selection intact while tags move.
-local function choices(menu, keys, labels)
+local function choices(menu, keys, labels, signatures)
+  signatures = signatures or labels
   local saved = menu.tags
   local previous = saved.keys or {}
-  if same(keys, previous) and same(labels, saved.labels or {}) then return end
+  if Text.same(keys, previous) and Text.same(signatures, saved.signatures) then return end
   local selected = previous[menu.selected_index]
   local index = 1
   for i, k in ipairs(keys) do
@@ -37,7 +31,7 @@ local function choices(menu, keys, labels)
   end
   menu.items = labels
   menu.selected_index = index
-  menu.tags = { fbm_quick = saved.fbm_quick, keys = keys, labels = labels }
+  menu.tags = { fbm_quick = saved.fbm_quick, keys = keys, signatures = signatures }
 end
 
 local function selected(menu)
@@ -63,11 +57,64 @@ end
 local function refresh_locate(p, body)
   local permissions = p.permission_group or game.permissions.get_group(0)
   local allowed = permissions.allows_action(defines.input_action.remote_view_surface)
+  body.group_search.visible = allowed
+  body.search_label.visible = allowed
   body.group_list.visible = allowed
   body.locate.visible = allowed
   local record = storage.tags[selected(body.group_list)]
   body.locate.enabled = allowed and may_locate(p, record)
   if body.locate.enabled then return record end
+end
+
+local function group_choices(query, keys, aliases)
+  local result = { keys = { "" }, labels = { L("choose-group") }, signatures = { "choose" } }
+  local duplicates = {}
+  for _, key in ipairs(keys) do
+    local rec = storage.tags[key]
+    if rec and rec.marker.valid then
+      local source = rec.source or ""
+      local alias = aliases[source] or source
+      if
+        query == ""
+        or source:lower():find(query, 1, true)
+        or alias:lower():find(query, 1, true)
+      then
+        local kind = rec.kind or "bug"
+        local sig = alias .. "\0" .. kind .. "\0" .. tostring(rec.count)
+        local size = rec.count and L("count-" .. kind, rec.count) or L("pending-count")
+        local index = #result.keys + 1
+        result.keys[index] = key
+        result.labels[index] = L("group-entry", alias, size)
+        result.signatures[index] = sig
+        duplicates[sig] = (duplicates[sig] or 0) + 1
+      end
+    end
+  end
+  for i = 2, #result.keys do
+    local sig = result.signatures[i]
+    if duplicates[sig] > 1 then
+      local id = storage.tags[result.keys[i]].marker.id
+      result.labels[i] = L("group-number", result.labels[i], id)
+      result.signatures[i] = sig .. "#" .. id
+    end
+  end
+  if #result.keys == 1 and query ~= "" then
+    result.labels[1] = L("no-matches")
+    result.signatures[1] = "empty"
+  end
+  return result
+end
+
+local function show_groups(p, body, keys, cache)
+  local query = body.group_search.text:lower():match("^%s*(.-)%s*$")
+  local items = cache and cache[query]
+  if not items then
+    items = group_choices(query, keys, Display.preferences(p.force).aliases)
+    if cache then cache[query] = items end
+  end
+  choices(body.group_list, items.keys, items.labels, items.signatures)
+  body.group_list.enabled = #items.keys > 1
+  refresh_locate(p, body)
 end
 
 -- A refresh batch shares one census across open panels. Selections, access and
@@ -109,29 +156,17 @@ local function panel_views(players)
       end
     end
   end
-  for id, team in pairs(teams) do
+  for _, team in pairs(teams) do
     table.sort(team.sources)
-    local aliases = Display.preferences(game.forces[id]).aliases
     for _, view in pairs(team.surfaces) do
       table.sort(view.rows, function(a, b)
         local ac, bc = a.record.count or 0, b.record.count or 0
         if ac ~= bc then return ac > bc end
         return a.key < b.key
       end)
-      view.keys, view.names = { "" }, { "Choose a group on this surface" }
-      local duplicates = {}
+      view.keys, view.searches = {}, {}
       for i, row in ipairs(view.rows) do
-        local r = row.record
-        local noun = r.kind or "bug"
-        local size = r.count and (r.count .. " " .. noun .. (r.count == 1 and "" or "s"))
-          or "count pending"
-        local label = (aliases[r.source] or r.source or "Group") .. " · " .. size
-        view.keys[i + 1], view.names[i + 1] = row.key, label
-        duplicates[label] = (duplicates[label] or 0) + 1
-      end
-      for i, row in ipairs(view.rows) do
-        local label = view.names[i + 1]
-        if duplicates[label] > 1 then view.names[i + 1] = label .. "  #" .. row.record.marker.id end
+        view.keys[i] = row.key
       end
     end
   end
@@ -142,7 +177,7 @@ local function refresh(p, frame, teams)
   local b = frame.body
   local team = (teams or panel_views({ p }))[p.force.index]
   local pref = Display.preferences(p.force)
-  frame.header.heading.caption = p.admin and "Bug Manager configuration" or "Bug Manager"
+  frame.header.heading.caption = p.admin and L("config-title") or L("title")
   for _, name in ipairs({
     "show",
     "config",
@@ -161,13 +196,13 @@ local function refresh(p, frame, teams)
     b[name].visible = p.admin
   end
   frame.tags = { force = p.force.index }
-  b.team.caption = "Receiving team · " .. p.force.name
+  b.team.caption = L("receiving-team", p.force.name)
   b.team.tooltip = p.force.name
   b.show.state = pref.show
   b.show.enabled = p.admin
   b.nests.state = pref.nests
   b.nests.enabled = p.admin
-  b.config.caption = #storage.rules == 0 and "Add first sharing rule" or "Sharing rules"
+  b.config.caption = #storage.rules == 0 and L("first-rule") or L("sharing-rules")
   b.preset.enabled = p.admin
   for i, name in ipairs(Display.names) do
     if name == pref.preset then
@@ -177,51 +212,50 @@ local function refresh(p, frame, teams)
   end
   local style = Display.style(p.force)
   local labels = {}
-  if style.team then labels[#labels + 1] = "source" end
-  if style.count then labels[#labels + 1] = "count" end
-  if style.kind then labels[#labels + 1] = "type" end
-  b.settings.caption = (style.group and "Grouped" or "Individual")
-    .. " · Cap "
-    .. style.cap
-    .. " · "
-    .. (#labels > 0 and table.concat(labels, " + ") or "No labels")
-  local state = "Icons on"
+  if style.team then labels[#labels + 1] = L("label-source") end
+  if style.count then labels[#labels + 1] = L("label-count") end
+  if style.kind then labels[#labels + 1] = L("label-type") end
+  b.settings.caption = L(
+    "display-settings",
+    style.group and L("grouped") or L("individual"),
+    style.cap,
+    #labels > 0 and Text.join(labels, " + ") or L("no-labels")
+  )
+  local state = "icons-on"
   if not storage.enabled then
-    state = "Tracking paused"
+    state = "paused"
   elseif not Rules.option("show") then
-    state = "Icons off · server master switch"
+    state = "master-off"
   elseif not pref.show then
-    state = "Icons off · team preference"
+    state = "team-off"
   end
   local pass = storage.pass
   if not storage.enabled then
-    b.update.caption = "Updates paused"
+    b.update.caption = L("updates-paused")
   elseif
     pass
     and (
       game.tick > storage.next_chart or (Rules.option("show") and game.tick > storage.next_marker)
     )
   then
-    b.update.caption = "Updates delayed · " .. pass.phase .. " pass in progress"
+    b.update.caption = L("update-delayed", L("phase-" .. pass.phase))
   elseif pass then
-    b.update.caption = "Updating · " .. pass.phase
+    b.update.caption = L("updating", L("phase-" .. pass.phase))
   else
     b.update.caption = ""
   end
   if storage.enabled then
     local age = storage.last_update
-        and ("Last update: " .. math.floor((game.tick - storage.last_update) / 60) .. " s ago")
-      or "Waiting for first update"
-    b.update.caption = pass and (b.update.caption .. " · " .. age) or age
+        and L("update-age", math.floor((game.tick - storage.last_update) / 60))
+      or L("waiting")
+    b.update.caption = pass and L("pair", b.update.caption, age) or age
   end
   local sources = team.sources
-  if #sources == 0 and state == "Icons on" then state = "No rules share icons with this team" end
-  if state == "Icons on" and storage.hidden_details[p.index] then
-    state = "Details hidden on your map"
-  end
-  b.visibility.caption = state
+  if #sources == 0 and state == "icons-on" then state = "no-incoming" end
+  if state == "icons-on" and storage.hidden_details[p.index] then state = "personal-off" end
+  b.visibility.caption = L(state)
   if #sources == 0 then
-    choices(b.source, { "" }, { "No active sources" })
+    choices(b.source, { "" }, { L("no-active-sources") })
   else
     choices(b.source, sources, sources)
   end
@@ -248,30 +282,24 @@ local function refresh(p, frame, teams)
     if pref.excluded[name] then filtered[#filtered + 1] = name end
   end
   local reasons = {}
-  if #filtered > 0 then
-    reasons[1] = "Sources filtered out for this team: " .. table.concat(filtered, ", ")
-  end
+  if #filtered > 0 then reasons[1] = L("filtered-sources", table.concat(filtered, ", ")) end
   local stats = storage.marker_stats
   local hidden = stats
     and stats.hidden_by_bucket
     and stats.hidden_by_bucket[p.force.index .. "/" .. p.surface.index]
   if hidden then
-    local noun = style.group and "group" or "individual marker"
-    reasons[#reasons + 1] = hidden
-      .. " "
-      .. noun
-      .. (hidden == 1 and "" or "s")
-      .. " hidden by the marker limit on "
-      .. p.surface.name
-      .. " at last count."
+    reasons[#reasons + 1] =
+      L(style.group and "hidden-groups" or "hidden-markers", hidden, p.surface.name)
   end
-  b.reasons.caption = table.concat(reasons, "\n")
+  b.reasons.caption = Text.join(reasons, "\n")
   b.reasons.visible = #reasons > 0
-  b.count.caption = "Team groups: " .. team.groups .. "   •   Total icons: " .. team.total
+  b.count.caption = L("team-count", team.groups, team.total)
   local view = team.surfaces[p.surface.index]
-  choices(b.group_list, view.keys, view.names)
-  b.group_list.enabled = #view.rows > 0
-  refresh_locate(p, b)
+  local search = b.group_search
+  if not Text.same(search.tags.keys, view.keys) then
+    search.tags = { fbm_quick = "group_search", keys = view.keys }
+  end
+  show_groups(p, b, view.keys, view.searches)
 end
 
 local function fit(p, frame)
@@ -280,6 +308,7 @@ local function fit(p, frame)
   local width = math.min(360, math.max(180, math.floor(size.width / p.display_scale) - 76))
   frame.body.team.style.maximal_width = width
   frame.body.source.style.maximal_width = width
+  frame.body.group_search.style.maximal_width = width
   frame.body.group_list.style.maximal_width = width
   frame.body.reasons.style.maximal_width = width
   frame.body.update.style.maximal_width = width
@@ -289,7 +318,7 @@ local function open(p)
   local frame = p.gui.screen.add { type = "frame", name = window, direction = "vertical" }
   local title = frame.add { type = "flow", name = "header" }
   title.drag_target = frame
-  title.add { type = "label", name = "heading", caption = "Bug Manager", style = "frame_title" }.drag_target =
+  title.add { type = "label", name = "heading", caption = L("title"), style = "frame_title" }.drag_target =
     frame
   local spacer = title.add { type = "empty-widget", style = "draggable_space_header" }
   spacer.style.horizontally_stretchable = true
@@ -298,7 +327,7 @@ local function open(p)
     type = "sprite-button",
     sprite = "utility/close",
     style = "frame_action_button",
-    tooltip = "Close",
+    tooltip = L("close"),
   })
   local b = frame.add {
     type = "scroll-pane",
@@ -308,57 +337,60 @@ local function open(p)
   }
   b.add { type = "label", name = "team", style = "heading_2_label" }
   b.add { type = "label", name = "visibility" }
-  add(
-    b,
-    "show",
-    { type = "checkbox", caption = "Show bug icons for this team", state = true, tooltip = scope }
-  )
+  add(b, "show", { type = "checkbox", caption = L("team-icons"), state = true, tooltip = scope })
   b.add { type = "label", name = "count" }
   b.add { type = "label", name = "update" }
   b.update.style.single_line = false
   b.add { type = "label", name = "reasons" }.style.single_line = false
-  add(b, "config", { type = "button", caption = "Sharing rules" })
+  add(b, "config", { type = "button", caption = L("sharing-rules") })
   if not storage.quick_help[p.index] then
-    local hint =
-      b.add { type = "label", caption = "Hiding icons keeps discovery and refresh running." }
+    local hint = b.add { type = "label", caption = L("personal-hint") }
     hint.style.single_line = false
     hint.style.maximal_width = 265
     storage.quick_help[p.index] = true
   end
+  b.add { type = "label", name = "search_label", caption = L("search-groups") }
+  add(b, "group_search", { type = "textfield", text = "", tooltip = L("search-help") })
+  add(b, "group_list", { type = "drop-down", items = {} })
+  add(b, "locate", {
+    type = "button",
+    caption = L("locate"),
+    tooltip = L("locate-help"),
+  })
   b.add { type = "line", name = "filters_line" }
-  b.add { type = "label", name = "source_label", caption = "Source team" }
+  b.add { type = "label", name = "source_label", caption = L("source-team") }
   add(b, "source", { type = "drop-down", items = {} })
-  b.add { type = "label", name = "alias_label", caption = "Map name (optional)" }
+  b.add { type = "label", name = "alias_label", caption = L("alias") }
   b.add {
     type = "textfield",
     name = "alias_field",
     text = "",
-    tooltip = "Name shown before the count for this source on your team's map. "
-      .. "Leave blank to use the source team name.",
+    tooltip = L("alias-hint"),
   }
-  add(b, "apply_alias", { type = "button", caption = "Apply name" })
+  add(b, "apply_alias", { type = "button", caption = L("apply-name") })
   add(b, "include", {
     type = "checkbox",
-    caption = "Show icons from selected source",
+    caption = L("include-source"),
     state = true,
     tooltip = scope,
   })
   add(b, "nests", {
     type = "checkbox",
-    caption = "Show tracked nests",
+    caption = L("show-nests"),
     state = true,
-    tooltip = "Display tracked spawners for this team. Nest tracking is configured in sharing rules.",
+    tooltip = L("nests-hint"),
   })
-  b.add { type = "label", name = "preset_label", caption = "Team display preset" }
-  add(b, "preset", { type = "drop-down", items = Display.names })
+  b.add { type = "label", name = "preset_label", caption = L("preset") }
+  add(b, "preset", {
+    type = "drop-down",
+    items = {
+      L("preset-server"),
+      L("preset-minimal"),
+      L("preset-balanced"),
+      L("preset-detailed"),
+    },
+  })
   b.add { type = "label", name = "settings" }
-  b.add { type = "line" }
-  add(b, "group_list", { type = "drop-down", items = {} })
-  add(b, "locate", {
-    type = "button",
-    caption = "Locate group",
-    tooltip = "Centre remote view on a displayed group on your current surface.",
-  })
   fit(p, frame)
   refresh(p, frame)
   p.opened = frame
@@ -401,11 +433,10 @@ local function sync_map_button(p)
   end
   local shown = not storage.hidden_details[p.index]
   local indicator = shown and 1 or 0
-  if button.number ~= indicator then
+  if button.number ~= indicator or type(button.tooltip) ~= "table" then
     button.number = indicator
     button.toggled = shown
-    button.tooltip = (shown and "Hide my bug details" or "Show my bug details")
-      .. "\nOnly changes your map. Terrain discovery and normal map blips are independent."
+    button.tooltip = shown and L("hide-details") or L("show-details")
   end
 end
 
@@ -442,7 +473,7 @@ function Panel.init(replace_old_panels)
     local old_button = flow and flow.fbm_quick_button
     if old_button and old_button.get_mod() == script.mod_name then old_button.destroy() end
     local frame = p.gui.screen[window]
-    if frame and (replace_old_panels or not frame.body or not frame.body.reasons) then
+    if frame and (replace_old_panels or not frame.body or not frame.body.group_search) then
       frame.destroy()
     end
     Panel.sync(p)
@@ -492,6 +523,10 @@ function Panel.event(event)
     refresh(p, frame)
     return true
   end
+  if action == "group_search" and event.name == ev.on_gui_text_changed then
+    show_groups(p, frame.body, el.tags.keys or {})
+    return true
+  end
   if event.name == ev.on_gui_click then
     if action == "close" then
       frame.destroy()
@@ -514,13 +549,13 @@ function Panel.event(event)
       if draft.saved ~= (pref.aliases[source] or "") then
         field.tags = {}
         refresh(p, frame)
-        p.print("Another admin changed this map name. The current name is shown.")
+        p.print(L("alias-changed"))
         return true
       end
       local name = field.text:match("^%s*(.-)%s*$")
       local _, length = name:gsub("[^\128-\191]", "")
       if length > 64 or name:find("[%c%[%]]") then
-        p.print("Use up to 64 characters without square brackets or control characters.")
+        p.print(L("alias-error"))
         return true
       end
       if name ~= draft.saved then

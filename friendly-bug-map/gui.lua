@@ -1,3 +1,5 @@
+local Text = require("ui-text")
+local L = Text.get
 local Rules = require("rules")
 local Tracker = require("tracker")
 
@@ -38,6 +40,7 @@ function RuleEditor.fit(p)
     f.error.style.single_line = false
     box.fields.field_source.style.maximal_width = math.max(120, math.floor(width / 2))
     box.fields.field_receiver.style.maximal_width = math.max(120, math.floor(width / 2))
+    f.preview.style.maximal_width = math.min(500, width - 32)
     if box.surface_summary then
       box.surface_summary.style.maximal_width = math.min(500, width - 32)
     end
@@ -49,16 +52,17 @@ function RuleEditor.fit(p)
 end
 
 function RuleEditor.list(p)
-  local f = window(p, "Bug Manager")
-  f.add { type = "label", caption = storage.enabled and "Processing enabled" or "Processing stopped" }
+  local f = window(p, L("title"))
   f.add {
     type = "label",
-    caption = "For grouping, labels and caps, open Settings → Mod settings → Map.",
+    caption = storage.enabled and L("processing-enabled") or L("processing-stopped"),
   }
-  button(f, "Marker settings", "marker_settings")
-  if #storage.rules == 0 then
-    f.add { type = "label", caption = "No sharing rules yet. Add a rule and choose both teams." }
-  end
+  f.add {
+    type = "label",
+    caption = L("map-settings-hint"),
+  }
+  button(f, L("marker-settings"), "marker_settings")
+  if #storage.rules == 0 then f.add { type = "label", caption = L("no-rules") } end
   if storage.notice then f.add { type = "label", caption = storage.notice } end
   local pane = f.add { type = "scroll-pane", name = "body", direction = "vertical" }
   for i, r in ipairs(storage.rules) do
@@ -66,25 +70,26 @@ function RuleEditor.list(p)
     block.add {
       type = "label",
       name = "summary",
-      caption = r.name
-        .. "   "
-        .. r.source
-        .. (r.two and " ↔ " or " → ")
-        .. r.receiver
-        .. "   "
-        .. Rules.description(r),
+      caption = L(
+        "rule-summary",
+        r.name,
+        r.source,
+        r.two and "↔" or "→",
+        r.receiver,
+        Rules.description(r)
+      ),
     }.style.single_line =
       false
     local row = block.add { type = "flow" }
-    button(row, "Edit", "edit", { i = i })
-    button(row, "Duplicate", "copy", { i = i })
-    button(row, r.enabled and "Disable" or "Enable", "toggle", { i = i })
-    button(row, "Delete", "delete", { i = i })
+    button(row, L("edit-rule"), "edit", { i = i })
+    button(row, L("duplicate"), "copy", { i = i })
+    button(row, r.enabled and L("disable") or L("enable"), "toggle", { i = i })
+    button(row, L("delete"), "delete", { i = i })
   end
   local row = f.add { type = "flow" }
-  button(row, "Add rule", "add")
-  button(row, "Status", "status")
-  button(row, "Close", "close")
+  button(row, L("add-rule"), "add")
+  button(row, L("status"), "status")
+  button(row, L("close"), "close")
   storage.editors[p.index] = { rev = storage.revision, mode = "list" }
   RuleEditor.fit(p)
 end
@@ -104,7 +109,7 @@ local function surface_names(text)
 end
 
 local function show_surfaces(box)
-  local fields = box.fields
+  local fields = box.filters
   local override = fields.field_surface_override.state
   local mode = fields.field_mode.selected_index
   local choose = override and mode ~= 1
@@ -113,41 +118,95 @@ local function show_surfaces(box)
   fields.field_platform.enabled = override
   fields.field_sandbox.enabled = override
   local names, seen = surface_names(fields.field_surfaces.text)
-  box.surface_choices.visible = choose
+  box.surface_choices.visible = box.filters.visible and choose
   for _, el in pairs(box.surface_choices.children) do
     el.state = seen and seen[el.tags.surface] == true or false
     el.enabled = names ~= nil
   end
   local summary
   if not override then
-    summary = "Uses the map’s default surface filters."
+    summary = L("surface-defaults")
   elseif mode == 1 then
-    summary = "All surfaces"
+    summary = L("all-surfaces")
   elseif not names then
-    summary = "Remove the empty entry in Surface names."
+    summary = L("invalid-surface")
   elseif mode == 2 then
-    summary = #names > 0 and (table.concat(names, ", ") .. " only") or "No surfaces selected"
+    summary = #names > 0 and L("surface-only", table.concat(names, ", ")) or L("no-surfaces")
   else
-    summary = #names > 0 and ("All surfaces except " .. table.concat(names, ", ")) or "All surfaces"
+    summary = #names > 0 and L("surface-except", table.concat(names, ", ")) or L("all-surfaces")
   end
   if override then
-    if fields.field_platform.state then summary = summary .. " · excludes space platforms" end
-    if fields.field_sandbox.state then summary = summary .. " · excludes sandbox names" end
+    if fields.field_platform.state then summary = L("without-platforms", summary) end
+    if fields.field_sandbox.state then summary = L("without-sandboxes", summary) end
   end
   box.surface_summary.caption = summary
 end
 
-function RuleEditor.surface_event(event)
+local function preview(frame, names)
+  local fields = frame.body.fields
+  local outputs = {}
+  for _, key in ipairs({ "marker", "discover", "refresh" }) do
+    if fields["field_" .. key].state then outputs[#outputs + 1] = L("output-" .. key) end
+  end
+  local radius = tonumber(fields.field_radius.text)
+  local range = radius and radius % 1 == 0 and radius >= 0 and radius <= 128 and L("tiles", radius)
+    or L("invalid-radius")
+  local summary = L(
+    "preview",
+    names[fields.field_source.selected_index] or L("choose-source"),
+    fields.field_two.state and "↔" or "→",
+    names[fields.field_receiver.selected_index] or L("choose-receiver"),
+    #outputs > 0 and Text.join(outputs, ", ") or L("no-output"),
+    range
+  )
+  frame.preview.caption = fields.field_enabled.state and summary or L("preview-disabled", summary)
+end
+
+local function show_filters(box)
+  local fields = box.filters
+  local override = fields.field_entity_override.state
+  for _, key in ipairs(Rules.categories) do
+    local field = fields["field_" .. key]
+    if not override and field.enabled then field.tags = { custom = field.state } end
+    if override and not field.enabled then field.state = field.tags.custom end
+    if not override then field.state = Rules.option(key) end
+    field.enabled = override
+  end
+  for _, key in ipairs({ "include", "exclude" }) do
+    local field = fields["field_" .. key]
+    if not override and field.enabled then
+      field.tags = { custom = field.text }
+      field.text = ""
+    elseif override and not field.enabled then
+      field.text = field.tags.custom
+    end
+    field.enabled = override
+  end
+  fields.visible = box.advanced.state
+  box.surface_summary.visible = fields.visible
+  show_surfaces(box)
+end
+
+function RuleEditor.field_event(event)
   local el = event.element
-  if not el or not el.valid or el.get_mod() ~= script.mod_name or not el.tags.fbm_surface then
+  if not el or not el.valid or el.get_mod() ~= script.mod_name or not el.tags.fbm_field then
     return
   end
   local p = game.get_player(event.player_index)
   local d = storage.editors[p.index]
   if not p.admin or not d or d.rev ~= storage.revision or d.mode ~= "edit" then return end
-  local box = p.gui.screen[root].body
+  local frame = p.gui.screen[root]
+  local box = frame.body
+  if el.tags.fbm_field == "preview" then
+    preview(frame, d.names)
+    return
+  end
+  if el.tags.fbm_field == "filters" then
+    show_filters(box)
+    return
+  end
   if el.tags.surface then
-    local field = box.fields.field_surfaces
+    local field = box.filters.field_surfaces
     local names, seen = surface_names(field.text)
     if not names or not field.enabled then return end
     local name = el.tags.surface
@@ -167,7 +226,7 @@ function RuleEditor.surface_event(event)
 end
 
 local function edit(p, r, i)
-  local f = window(p, i and "Edit sharing rule" or "New sharing rule")
+  local f = window(p, i and L("edit-title") or L("new-title"))
   local box = f.add { type = "scroll-pane", name = "body", direction = "vertical" }
   local fields = box.add { type = "table", name = "fields", column_count = 2 }
   local function field(k, label, spec)
@@ -186,10 +245,10 @@ local function edit(p, r, i)
     for n, v in ipairs(items) do
       if v == value then index = n end
     end
-    field(k, label, { type = "drop-down", items = items, selected_index = index })
+    local labels = items
+    if k == "mode" then labels = { L("mode-all"), L("mode-allow"), L("mode-block") } end
+    field(k, label, { type = "drop-down", items = labels, selected_index = index })
   end
-  entry("name", "Rule name")
-  check("enabled", "Enabled")
   local names = {}
   for _, force in pairs(game.forces) do
     names[#names + 1] = force.name
@@ -204,28 +263,50 @@ local function edit(p, r, i)
     end
   end
   table.sort(names)
-  choice("source", "Source force", names, r.source)
-  choice("receiver", "Receiving force", names, r.receiver)
-  button(fields, "Swap forces", "swap")
+  choice("source", L("source"), names, r.source)
+  choice("receiver", L("receiver"), names, r.receiver)
+  button(fields, L("swap"), "swap")
   fields.add { type = "empty-widget" }
-  check("two", "Share in both directions")
-  check("marker", "Show markers")
-  check("discover", "Discover terrain (permanent)")
-  check("refresh", "Refresh discovered terrain")
-  entry("radius", "Square radius (0–128 tiles)")
-  check("entity_override", "Override default entity filters")
-  for _, k in ipairs(Rules.categories) do
-    check(k, "   " .. k)
+  check("two", L("both"))
+  entry("name", L("rule-name"))
+  check("enabled", L("enabled"))
+  check("marker", L("marker"))
+  check("discover", L("discover"))
+  check("refresh", L("refresh"))
+  entry("radius", L("radius"))
+  for _, key in ipairs({
+    "source",
+    "receiver",
+    "enabled",
+    "two",
+    "marker",
+    "discover",
+    "refresh",
+    "radius",
+  }) do
+    fields["field_" .. key].tags = { fbm_field = "preview" }
   end
-  entry("include", "   Include prototypes (CSV)")
-  entry("exclude", "   Exclude prototypes (CSV)")
-  check("surface_override", "Override surface filters")
-  choice("mode", "   Surface mode", { "All", "Allowlist", "Blocklist" }, r.mode)
-  entry("surfaces", "   Surface names (advanced)")
-  fields.field_surfaces.tooltip =
-    "Comma-separated exact names. You can include a surface that will exist later."
-  check("platform", "   Exclude space platforms")
-  check("sandbox", "   Exclude sandbox names")
+  box.add {
+    type = "checkbox",
+    name = "advanced",
+    caption = L("advanced"),
+    state = false,
+    tags = { fbm_field = "filters" },
+  }
+  fields = box.add { type = "table", name = "filters", column_count = 2 }
+  check("entity_override", L("entity-override"))
+  for _, k in ipairs(Rules.categories) do
+    check(k, L("category-" .. k))
+  end
+  fields.field_entity_override.tags = { fbm_field = "filters" }
+  entry("include", L("field-include"))
+  entry("exclude", L("field-exclude"))
+  check("surface_override", L("surface-override"))
+  choice("mode", L("surface-mode"), { "All", "Allowlist", "Blocklist" }, r.mode)
+  entry("surfaces", L("field-surfaces"))
+  fields.field_surfaces.tooltip = L("surfaces-help")
+  check("platform", L("platform"))
+  check("sandbox", L("sandbox"))
   local surfaces = {}
   for _, s in pairs(game.surfaces) do
     if not s.name:find(",", 1, true) and s.name == s.name:match("^%s*(.-)%s*$") then
@@ -234,7 +315,7 @@ local function edit(p, r, i)
   end
   table.sort(surfaces)
   for _, key in ipairs({ "surface_override", "mode", "surfaces", "platform", "sandbox" }) do
-    fields["field_" .. key].tags = { fbm_surface = true }
+    fields["field_" .. key].tags = { fbm_field = "surface" }
   end
   local picker = box.add { type = "flow", name = "surface_choices", direction = "vertical" }
   for _, name in ipairs(surfaces) do
@@ -243,24 +324,29 @@ local function edit(p, r, i)
       caption = name,
       state = false,
       tags = {
-        fbm_surface = true,
+        fbm_field = "surface",
         surface = name,
       },
     }
   end
   box.add { type = "label", name = "surface_summary" }.style.single_line = false
-  show_surfaces(box)
-  box.add { type = "label", caption = "Unchecked override sections use the map defaults." }
+  show_filters(box)
+  f.add { type = "label", name = "preview" }.style.single_line = false
+  preview(f, names)
   f.add { type = "label", name = "error", caption = "" }
   local row = f.add { type = "flow" }
-  button(row, "Apply", "apply")
-  button(row, "Cancel", "cancel")
+  button(row, L("apply"), "apply")
+  button(row, L("cancel"), "cancel")
   storage.editors[p.index] = { rev = storage.revision, mode = "edit", i = i, names = names }
   RuleEditor.fit(p)
 end
 
 function RuleEditor.add(p)
-  edit(p, Rules.new())
+  local rule = Rules.new()
+  for _, key in ipairs(Rules.categories) do
+    rule[key] = Rules.option(key)
+  end
+  edit(p, rule)
 end
 
 function RuleEditor.changed()
@@ -274,18 +360,19 @@ function RuleEditor.changed()
       elseif d.mode == "list" then
         RuleEditor.list(p)
       else
-        p.gui.screen[root].error.caption =
-          "Configuration changed. Cancel and reopen to edit the latest version."
+        p.gui.screen[root].error.caption = L("stale-edit")
       end
     end
   end
 end
 
-local function read_rule(fields, d)
+local function read_rule(box, d)
   local r = Rules.new()
   for k, default in pairs(r) do
-    local f = fields["field_" .. k]
-    if type(default) == "boolean" then
+    local f = box.fields["field_" .. k] or box.filters["field_" .. k]
+    if not f.enabled and f.tags.custom ~= nil then
+      r[k] = f.tags.custom
+    elseif type(default) == "boolean" then
       r[k] = f.state
     elseif k == "source" or k == "receiver" then
       r[k] = d.names[f.selected_index]
@@ -295,23 +382,21 @@ local function read_rule(fields, d)
       r[k] = f.text:match("^%s*(.-)%s*$")
     end
   end
-  if not r.source or not r.receiver then
-    return nil, "Choose a source team and a receiving team."
-  end
-  if #r.name < 1 or #r.name > 80 then return nil, "Use a rule name of 1–80 bytes." end
+  if not r.source or not r.receiver then return nil, L("need-teams") end
+  if #r.name < 1 or #r.name > 80 then return nil, L("invalid-name") end
   r.radius = tonumber(r.radius)
   if not r.radius or r.radius % 1 ~= 0 or r.radius < 0 or r.radius > 128 then
-    return nil, "Radius must be a whole number from 0 to 128."
+    return nil, L("radius-error")
   end
   for _, k in ipairs({ "include", "exclude", "surfaces" }) do
     local value = r[k]
-    if #value > 2048 then return nil, k .. " exceeds 2048 bytes." end
+    if #value > 2048 then return nil, L("too-long", L("field-" .. k)) end
     if value ~= "" then
       for token in (value .. ","):gmatch("(.-),") do
         local name = token:match("^%s*(.-)%s*$")
-        if name == "" then return nil, "Empty entry in " .. k .. "." end
+        if name == "" then return nil, L("empty-entry", L("field-" .. k)) end
         if k ~= "surfaces" and r.entity_override and not prototypes.entity[name] then
-          return nil, "Unknown entity prototype: " .. name
+          return nil, L("unknown-prototype", name)
         end
       end
     end
@@ -344,12 +429,14 @@ function RuleEditor.click(event, status, open_marker_panel)
     return
   end
   if d.rev ~= storage.revision then
-    p.print("Configuration changed. Reopen /bug-map config.")
+    p.print(L("stale-list"))
     return
   end
   local r = storage.rules[i]
   if a == "status" then
-    p.print(status())
+    status(function(line)
+      p.print(line)
+    end)
     return
   end
   if a == "add" then
@@ -375,9 +462,10 @@ function RuleEditor.click(event, status, open_marker_panel)
     if a == "swap" then
       fields.field_source.selected_index, fields.field_receiver.selected_index =
         fields.field_receiver.selected_index, fields.field_source.selected_index
+      preview(f, d.names)
       return
     end
-    local new, err = read_rule(fields, d)
+    local new, err = read_rule(f.body, d)
     if not new then
       f.error.caption = err
       return

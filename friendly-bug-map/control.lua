@@ -1,3 +1,5 @@
+local Text = require("ui-text")
+local L = Text.get
 local Rules = require("rules")
 local Tracker = require("tracker")
 local RuleEditor = require("gui")
@@ -41,6 +43,12 @@ script.on_configuration_changed(function(event)
     if team ~= nil then settings.global["fbm-team"] = { value = team } end
   end
   remember_settings()
+  if change and change.old_version ~= change.new_version then
+    for _, p in pairs(game.players) do
+      local frame = p.gui.screen.fbm_window
+      if frame and frame.error and not frame.preview then RuleEditor.close(p) end
+    end
+  end
   RuleEditor.changed()
 end)
 
@@ -85,11 +93,7 @@ script.on_event(ev.on_forces_merged, function(e)
     if r.source == e.source_name then r.source = e.destination.name end
     if r.receiver == e.source_name then r.receiver = e.destination.name end
   end
-  storage.notice = "Force "
-    .. e.source_name
-    .. " merged into "
-    .. e.destination.name
-    .. ". Rules now use the destination."
+  storage.notice = L("merged-force", e.source_name, e.destination.name)
   RuleEditor.changed()
 end)
 
@@ -98,28 +102,33 @@ script.on_event(ev.on_runtime_mod_setting_changed, function(e)
   local p = e.player_index and game.get_player(e.player_index)
   if p and not p.admin then
     settings.global[e.setting] = { value = storage.approved_settings[e.setting] }
-    p.print("Bug Manager settings require admin access.")
+    p.print(L("settings-admin"))
     return
   end
   storage.approved_settings[e.setting] = settings.global[e.setting].value
   RuleEditor.changed()
 end)
 
-local function status()
-  local lines = { "Bug Manager: " .. (storage.enabled and "enabled" or "stopped") }
-  if #storage.rules == 0 then
-    lines[#lines + 1] = "No sharing rules. An admin can add one in /bug-map config."
+local function status(send)
+  local lines = {}
+  local function reply(line)
+    lines[#lines + 1] = line
   end
+  reply(L(storage.enabled and "status-enabled" or "status-stopped"))
+  if #storage.rules == 0 then reply(L("status-no-rules")) end
   for _, r in ipairs(storage.rules) do
-    lines[#lines + 1] = r.name
-      .. " ("
-      .. r.source
-      .. (r.two and " ↔ " or " → ")
-      .. r.receiver
-      .. "): "
-      .. Rules.description(r)
+    reply(
+      L(
+        "rule-summary",
+        r.name,
+        r.source,
+        r.two and "↔" or "→",
+        r.receiver,
+        Rules.description(r)
+      )
+    )
   end
-  if storage.notice then lines[#lines + 1] = storage.notice end
+  if storage.notice then reply(storage.notice) end
   local counts = {}
   for _, n in pairs(storage.nodes) do
     local e = n.entity
@@ -130,7 +139,7 @@ local function status()
   end
   local total = 0
   for k, v in pairs(counts) do
-    lines[#lines + 1] = k .. ": " .. v
+    reply(L("indexed-team", k, v))
     total = total + v
   end
   local tags, groups = 0, 0
@@ -140,108 +149,83 @@ local function status()
       if v.group then groups = groups + 1 end
     end
   end
-  lines[#lines + 1] = "Indexed entities: "
-    .. total
-    .. ". Team markers: "
-    .. tags
-    .. " ("
-    .. groups
-    .. " grouped)."
+  reply(L("indexed", total, tags, groups))
   local stats = storage.marker_stats
   if stats then
-    lines[#lines + 1] = "Last marker pass at "
-      .. stats.tick
-      .. ": "
-      .. stats.bugs
-      .. " grouped bugs (receiver contributions), "
-      .. (stats.hidden_groups or 0)
-      .. " hidden groups, "
-      .. (stats.hidden_individuals or 0)
-      .. " hidden individual markers."
+    reply(
+      L(
+        "last-census",
+        stats.tick,
+        stats.bugs,
+        stats.hidden_groups or 0,
+        stats.hidden_individuals or 0
+      )
+    )
   else
-    lines[#lines + 1] = "No completed marker census."
+    reply(L("no-census"))
   end
   local p = storage.pass
-  lines[#lines + 1] = "Last completed tick: "
-    .. (storage.last_update or "none")
-    .. ". Pass: "
-    .. (p and p.phase or "idle")
+  reply(L("last-tick", storage.last_update or L("none"), L("phase-" .. (p and p.phase or "idle"))))
   if p then
-    lines[#lines + 1] = "Sampled entities: "
-      .. p.sampled
-      .. ". Chart candidates: "
-      .. #p.jobs
-      .. ". Groups ranked: "
-      .. p.ranked
-      .. "/"
-      .. (p.candidates or 0)
-      .. ". Owned markers checked: "
-      .. p.pruned
+    reply(L("pass-counts", p.sampled, #p.jobs, p.ranked, p.candidates or 0, p.pruned))
     local sizes = { chart = #p.jobs, represent = p.members and #p.members or 0, markers = #p.order }
-    if sizes[p.phase] then
-      lines[#lines + 1] = "Items left in this phase: " .. math.max(0, sizes[p.phase] - p.index + 1)
-    end
+    if sizes[p.phase] then reply(L("items-left", math.max(0, sizes[p.phase] - p.index + 1))) end
   end
   local s = storage.scan
-  lines[#lines + 1] = "Reconciliation: "
-    .. (s and ("surface job " .. s.index .. "/" .. #s.jobs) or "idle")
-  return table.concat(lines, "\n")
+  reply(s and L("scan-progress", s.index, #s.jobs) or L("scan-idle"))
+  send(Text.join(lines, "\n"))
 end
 
-commands.add_command(
-  "bug-map",
-  "config | status | on | off | refresh | clear | reset-ui",
-  function(e)
-    local p = e.player_index and game.get_player(e.player_index)
-    local function reply(msg)
-      if p then
-        p.print(msg)
-      else
-        rcon.print(msg)
-        log(msg)
-      end
-    end
-    local a = (e.parameter or "status"):match("^%s*(.-)%s*$")
-    if a == "reset-ui" then
-      if p then
-        Panel.reset(p)
-      else
-        reply("Use /bug-map reset-ui in-game to centre your marker panel.")
-      end
-      return
-    end
-    if p and not p.admin then
-      reply("Admin access required.")
-      return
-    end
-    if a == "config" then
-      if p then
-        RuleEditor.list(p)
-      else
-        reply("Open the configuration window as an in-game admin.")
-      end
-    elseif a == "status" then
-      reply(status())
-    elseif a == "off" or a == "clear" then
-      Tracker.stop()
-      RuleEditor.changed()
-      reply("Stopped. Owned markers removed.")
-    elseif a == "on" then
-      storage.enabled = true
-      RuleEditor.changed()
-      reply("Enabled. Reconciliation and visibility queued.")
-    elseif a == "refresh" then
-      if storage.enabled then
-        Tracker.reset()
-        reply("Reconciliation and visibility queued.")
-      else
-        reply("Processing is stopped. Use /bug-map on.")
-      end
+commands.add_command("bug-map", L("command-help"), function(e)
+  local p = e.player_index and game.get_player(e.player_index)
+  local function reply(msg)
+    if p then
+      p.print(msg)
     else
-      reply("Use /bug-map config, status, on, off, refresh, clear or reset-ui.")
+      rcon.print(msg)
+      log(msg)
     end
   end
-)
+  local a = (e.parameter or "status"):match("^%s*(.-)%s*$")
+  if a == "reset-ui" then
+    if p then
+      Panel.reset(p)
+    else
+      reply(L("reset-ingame"))
+    end
+    return
+  end
+  if p and not p.admin then
+    reply(L("admin-required"))
+    return
+  end
+  if a == "config" then
+    if p then
+      RuleEditor.list(p)
+    else
+      reply(L("config-ingame"))
+    end
+  elseif a == "status" then
+    status(reply)
+  elseif a == "off" or a == "clear" then
+    Tracker.stop()
+    RuleEditor.changed()
+    reply(L("stopped"))
+  elseif a == "on" then
+    storage.enabled = true
+    RuleEditor.changed()
+    reply(L("started"))
+  elseif a == "refresh" then
+    if storage.enabled then
+      Tracker.reset()
+      reply(L("queued"))
+    else
+      reply(L("start-first"))
+    end
+  else
+    reply(L("usage"))
+  end
+end)
 
 script.on_event(ev.on_gui_click, function(e)
   if not Panel.event(e) then RuleEditor.click(e, status, Panel.reset) end
@@ -252,10 +236,12 @@ script.on_event(ev.on_lua_shortcut, function(e)
 end)
 
 script.on_event({ ev.on_gui_checked_state_changed, ev.on_gui_selection_state_changed }, function(e)
-  if not Panel.event(e) then RuleEditor.surface_event(e) end
+  if not Panel.event(e) then RuleEditor.field_event(e) end
 end)
 
-script.on_event(ev.on_gui_text_changed, RuleEditor.surface_event)
+script.on_event(ev.on_gui_text_changed, function(e)
+  if not Panel.event(e) then RuleEditor.field_event(e) end
+end)
 script.on_nth_tick(60, Panel.refresh_open)
 script.on_event({
   ev.on_player_created,

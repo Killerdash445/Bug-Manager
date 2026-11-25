@@ -1,3 +1,4 @@
+local L = require("ui-text").get
 local Rules = {}
 
 function Rules.option(k)
@@ -49,15 +50,15 @@ function Rules.new()
   }
 end
 
-function Rules.status(r)
+local function status(r)
   local missing = {}
   for _, name in ipairs({ r.source, r.receiver }) do
     if not game.forces[name] then missing[#missing + 1] = name end
   end
-  if #missing > 0 then return "Missing force: " .. table.concat(missing, ", ") end
-  if not r.enabled then return "Disabled" end
-  if not (r.discover or r.refresh or r.marker) then return "No output selected" end
-  return "Active"
+  if #missing > 0 then return "missing-force", table.concat(missing, ", ") end
+  if not r.enabled then return "disabled" end
+  if not (r.discover or r.refresh or r.marker) then return "no-output" end
+  return "active"
 end
 
 local function names(s)
@@ -69,13 +70,12 @@ local function names(s)
 end
 
 function Rules.description(r)
-  local state = Rules.status(r)
+  local id, detail = status(r)
+  local state = L(id, detail)
   if r.entity_override then
     for _, field in ipairs({ "include", "exclude" }) do
       for name in pairs(names(r[field])) do
-        if not prototypes.entity[name] then
-          return state .. " (missing " .. field .. " prototype: " .. name .. ")"
-        end
+        if not prototypes.entity[name] then return L("missing-" .. field, state, name) end
       end
     end
   end
@@ -85,7 +85,7 @@ end
 function Rules.compile()
   local routes = {}
   for _, r in ipairs(storage.rules) do
-    if Rules.status(r) == "Active" then
+    if status(r) == "active" then
       local f = { include = {}, exclude = {}, surfaces = {}, mode = "All" }
       for _, k in ipairs(Rules.categories) do
         f[k] = Rules.option(k)

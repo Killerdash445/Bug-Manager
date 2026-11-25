@@ -1,3 +1,5 @@
+local Text = require("ui-text")
+local L = Text.get
 -- Each pass samples a finite population in registry order. The grid indexes
 -- anchors, not members. Anchors in a partition are at least D tiles apart.
 local Rules = require("rules")
@@ -177,16 +179,17 @@ function Groups.represent(p, v)
 end
 
 function Groups.label(m, source_name)
-  local noun = m.kind .. (m.count == 1 and "" or "s")
   local parts = {}
   if m.style.count then
-    parts[#parts + 1] = m.count .. " " .. noun
+    parts[#parts + 1] = L("count-" .. m.kind, m.count)
   elseif m.kind ~= "bug" then
-    parts[#parts + 1] = m.kind
+    parts[#parts + 1] = L("kind-" .. m.kind)
   end
-  if m.style.kind then parts[#parts + 1] = m.species end
-  local detail = table.concat(parts, " · ")
-  if m.style.team then return source_name .. (detail ~= "" and ": " .. detail or "") end
+  if m.style.kind then parts[#parts + 1] = m.species == "Mixed" and L("mixed") or m.species end
+  local detail = Text.join(parts, " · ")
+  if m.style.team then
+    return detail ~= "" and L("map-label", source_name, detail) or source_name
+  end
   return detail
 end
 
