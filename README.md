@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <strong>Source version</strong> <a href="friendly-bug-map/info.json"><code>1.3.12</code></a>
+  <strong>Source version</strong> <a href="friendly-bug-map/info.json"><code>1.3.13</code></a>
   &nbsp;·&nbsp; <strong>Factorio</strong> <code>2.1</code>
   &nbsp;·&nbsp; <strong>License</strong> <a href="LICENSE">MIT</a>
 </p>
@@ -53,9 +53,11 @@ Base Factorio 2.1 is the only requirement. With Informatron 0.5.0 or later enabl
 
 Markers and terrain update periodically. Discovered terrain stays on the map after a swarm moves away. Zoomed-in remote viewing follows Factorio’s normal live-visibility rules.
 
+With **2,503 tracked bugs** sharing terrain with **two receiving teams**, median script-update time fell from **1.502 to 0.511 ms per tick** between 1.3.12 and 1.3.13. The one-team test measured **0.350 and 0.351 ms per tick**. These were headless base-game tests at the Balanced preset, with three 600-tick runs per version on each save.
+
 Back up your save, install the same ZIP on the server and clients, and load the existing save. Bug Manager then updates its tracking data automatically. Saved rules, custom team names, marker preferences and ordinary map tags carry forward. Apply any open rule edit before updating. An older window closes once and can be reopened with the hotbar shortcut or `/bug-map config`.
 
-On Factorio **2.1.23**, direct upgrades to **1.3.12** and a second save and restart passed for all 19 earlier tracking builds from 1.0.0 through 1.3.11. One graphical client exercised the marker panel and rule editor with the 75-mod test profile. Simultaneous use by two connected clients remains untested on this build.
+On Factorio **2.1.23**, direct upgrades to **1.3.13** and a second save and restart passed for all 20 earlier tracking builds from 1.0.0 through 1.3.12. One graphical client exercised the marker panel and rule editor with the 75-mod test profile. Simultaneous use by two connected clients remains untested on this build.
 
 ## Working with the source
 

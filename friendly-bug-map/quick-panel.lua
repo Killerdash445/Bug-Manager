@@ -177,32 +177,18 @@ local function panel_views(players)
   return teams
 end
 
-local function refresh(p, frame, teams)
-  local b = frame.body
-  local team = (teams or panel_views({ p }))[p.force.index]
-  local pref = Display.preferences(p.force)
-  frame.header.heading.caption = p.admin and L("config-title") or L("title")
-  local overview, finder, admin = b.overview, b.finder, b.admin
-  local options = admin.options
-  admin.visible = p.admin
-  admin.team_options.state = storage.expanded_team_settings[p.index] == true
-  options.visible = p.admin and admin.team_options.state
-  frame.tags = { force = p.force.index, surface = p.surface.index }
-  overview.head.team.caption = L("receiving-team", p.force.name)
-  overview.head.team.tooltip = p.force.name
+local function refresh_options(options, force, pref, sources, style)
+  options.show.enabled = true
+  options.nests.enabled = true
+  options.preset.enabled = true
   options.show.state = pref.show
-  options.show.enabled = p.admin
   options.nests.state = pref.nests
-  options.nests.enabled = p.admin
-  admin.bar.config.caption = #storage.rules == 0 and L("first-rule") or L("sharing-rules")
-  options.preset.enabled = p.admin
   for i, name in ipairs(Display.names) do
     if name == pref.preset then
       if options.preset.selected_index ~= i then options.preset.selected_index = i end
       break
     end
   end
-  local style = Display.style(p.force)
   local labels = {}
   if style.team then labels[#labels + 1] = L("label-source") end
   if style.count then labels[#labels + 1] = L("label-count") end
@@ -213,6 +199,47 @@ local function refresh(p, frame, teams)
     style.cap,
     #labels > 0 and Text.join(labels, " + ") or L("no-labels")
   )
+  if #sources == 0 then
+    choices(options.source, { "" }, { L("no-active-sources") })
+  else
+    choices(options.source, sources, sources)
+  end
+  options.source.enabled = #sources > 0
+  local source = selected(options.source)
+  local field = options.alias_row.alias_field
+  local draft = field.tags
+  local saved = pref.aliases[source] or ""
+  -- Periodic refresh must preserve a draft for the same source and receiver.
+  if
+    draft.force ~= force.index
+    or draft.source ~= source
+    or (draft.saved ~= saved and field.text == draft.saved)
+  then
+    field.text = saved
+    field.tags = { force = force.index, source = source, saved = saved }
+  end
+  field.enabled = #sources > 0
+  options.alias_row.apply_alias.enabled = field.enabled
+  options.include.enabled = #sources > 0
+  options.include.state = #sources > 0 and not pref.excluded[source]
+end
+
+local function refresh(p, frame, teams)
+  local b = frame.body
+  local team = (teams or panel_views({ p }))[p.force.index]
+  local pref = Display.preferences(p.force)
+  frame.header.heading.caption = p.admin and L("config-title") or L("title")
+  local overview, finder, admin = b.overview, b.finder, b.admin
+  local options = admin.options
+  admin.visible = p.admin
+  admin.team_options.state = storage.expanded_team_settings[p.index] == true
+  options.visible = p.admin and admin.team_options.state
+  if p.admin then
+    admin.bar.config.caption = #storage.rules == 0 and L("first-rule") or L("sharing-rules")
+  end
+  frame.tags = { force = p.force.index, surface = p.surface.index }
+  overview.head.team.caption = L("receiving-team", p.force.name)
+  overview.head.team.tooltip = p.force.name
   local state = "icons-on"
   if not storage.enabled then
     state = "paused"
@@ -246,29 +273,6 @@ local function refresh(p, frame, teams)
   if #sources == 0 and state == "icons-on" then state = "no-incoming" end
   if state == "icons-on" and storage.hidden_details[p.index] then state = "personal-off" end
   overview.head.visibility.caption = L(state)
-  if #sources == 0 then
-    choices(options.source, { "" }, { L("no-active-sources") })
-  else
-    choices(options.source, sources, sources)
-  end
-  options.source.enabled = #sources > 0
-  local source = selected(options.source)
-  local field = options.alias_row.alias_field
-  local draft = field.tags
-  local saved = pref.aliases[source] or ""
-  -- Periodic refresh must preserve a draft for the same source and receiver.
-  if
-    draft.force ~= p.force.index
-    or draft.source ~= source
-    or (draft.saved ~= saved and field.text == draft.saved)
-  then
-    field.text = saved
-    field.tags = { force = p.force.index, source = source, saved = saved }
-  end
-  field.enabled = p.admin and #sources > 0
-  options.alias_row.apply_alias.enabled = field.enabled
-  options.include.enabled = p.admin and #sources > 0
-  options.include.state = #sources > 0 and not pref.excluded[source]
   local filtered = {}
   for _, name in ipairs(sources) do
     if pref.excluded[name] then filtered[#filtered + 1] = name end
@@ -279,6 +283,8 @@ local function refresh(p, frame, teams)
   local hidden = stats
     and stats.hidden_by_bucket
     and stats.hidden_by_bucket[p.force.index .. "/" .. p.surface.index]
+  local style = (options.visible or hidden) and Display.style(p.force)
+  if options.visible then refresh_options(options, p.force, pref, sources, style) end
   if hidden then
     reasons[#reasons + 1] =
       L(style.group and "hidden-groups" or "hidden-markers", hidden, p.surface.name)
@@ -576,7 +582,7 @@ function Panel.event(event)
       else
         RuleEditor.list(p)
       end
-    elseif action == "apply_alias" and p.admin then
+    elseif action == "apply_alias" and p.admin and frame.body.admin.options.visible then
       local b = frame.body.admin.options
       local field = b.alias_row.alias_field
       local source = selected(b.source)
@@ -634,6 +640,7 @@ function Panel.event(event)
     if el.state then frame.force_auto_center() end
     return true
   end
+  if not frame.body.admin.options.visible then return true end
   local pref = Display.preferences(p.force)
   if event.name == ev.on_gui_checked_state_changed then
     if action == "show" then

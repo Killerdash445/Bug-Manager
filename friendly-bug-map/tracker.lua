@@ -184,27 +184,30 @@ local function scan_tick(budget)
   end
 end
 
--- Chunk jobs accumulate by union for an entire pass. A matching rectangle and
--- action pair was already queued. The shortcut is local to this tick, so a
--- save/reload or phase change needs no new persistent state.
-local function queue_chunks(p, recent, force, surface, pos, radius, discover, refresh)
+-- Jobs accumulate by union. Each receiver and action can skip its last rectangle.
+local function queue_chunks(p, rectangles, force, surface, pos, radius, action)
   if radius < 0 then return end
   local left, right = math.floor((pos.x - radius) / 32), math.floor((pos.x + radius) / 32)
   local top, bottom = math.floor((pos.y - radius) / 32), math.floor((pos.y + radius) / 32)
-  if
-    recent.force == force
-    and recent.surface == surface
-    and recent.left == left
-    and recent.right == right
-    and recent.top == top
-    and recent.bottom == bottom
-    and recent.discover == discover
-    and recent.refresh == refresh
+  local receiver = rectangles[force]
+  if not receiver then
+    receiver = {}
+    rectangles[force] = receiver
+  end
+  local rect = receiver[action]
+  if not rect then
+    rect = {}
+    receiver[action] = rect
+  elseif
+    rect.surface == surface
+    and rect.left == left
+    and rect.right == right
+    and rect.top == top
+    and rect.bottom == bottom
   then
     return
   end
-  recent.force, recent.surface, recent.left, recent.right = force, surface, left, right
-  recent.top, recent.bottom, recent.discover, recent.refresh = top, bottom, discover, refresh
+  rect.surface, rect.left, rect.right, rect.top, rect.bottom = surface, left, right, top, bottom
   for x = left, right do
     for y = top, bottom do
       local key = table.concat({ force, surface, x, y }, "/")
@@ -214,15 +217,17 @@ local function queue_chunks(p, recent, force, surface, pos, radius, discover, re
         p.chunks[key] = job
         p.jobs[#p.jobs + 1] = job
       end
-      if discover then job.discover = true end
-      if refresh then job.refresh = true end
+      if action ~= "refresh" then job.discover = true end
+      if action ~= "discover" then job.refresh = true end
     end
   end
 end
 
-local function sample(p, e, recent)
-  local routes = routes_for(e)
-  if not routes then return false end
+local function outputs_for(routes, e, recent)
+  local surface, prototype = e.surface.index, e.name
+  if recent.routes == routes and recent.surface == surface and recent.prototype == prototype then
+    return recent.output
+  end
   local output = {}
   for _, route in ipairs(routes) do
     if matches(route, e) then
@@ -234,6 +239,14 @@ local function sample(p, e, recent)
       output[route.target] = o
     end
   end
+  recent.routes, recent.surface, recent.prototype, recent.output = routes, surface, prototype, output
+  return output
+end
+
+local function sample(p, e, recent)
+  local routes = routes_for(e)
+  if not routes then return false end
+  local output = outputs_for(routes, e, recent)
   for name, o in pairs(output) do
     local force = game.forces[name]
     if p.mark and o.marker then
@@ -245,10 +258,10 @@ local function sample(p, e, recent)
     if p.chart then
       local fi, si, pos = force.index, e.surface.index, e.position
       if o.discover == o.refresh then
-        queue_chunks(p, recent, fi, si, pos, o.discover, true, true)
+        queue_chunks(p, recent.rectangles, fi, si, pos, o.discover, "both")
       else
-        queue_chunks(p, recent, fi, si, pos, o.discover, true, false)
-        queue_chunks(p, recent, fi, si, pos, o.refresh, false, true)
+        queue_chunks(p, recent.rectangles, fi, si, pos, o.discover, "discover")
+        queue_chunks(p, recent.rectangles, fi, si, pos, o.refresh, "refresh")
       end
     end
   end
@@ -347,7 +360,7 @@ function Tracker.tick()
     if mark then storage.next_marker = game.tick + storage.profile[2] end
     if vision then storage.next_chart = game.tick + storage.profile[1] end
   end
-  local recent = p.chart and p.phase == "sample" and {}
+  local recent = p.phase == "sample" and { rectangles = p.chart and {} }
   for step = 1, budget do
     if p.phase == "sample" and p.cursor then
       p.sampled = p.sampled + 1

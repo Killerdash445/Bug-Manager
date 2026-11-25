@@ -1,4 +1,10 @@
 ---------------------------------------------------------------------------------------------------
+Version: 1.3.13
+  Optimizations:
+    - Swarms sharing terrain with several teams skip repeated work for each receiving team. Discovery and refresh retain their own ranges and map updates keep their original order.
+    - Consecutive bugs with the same source team, surface and prototype reuse their matching sharing rules within a single tick.
+    - The marker panel refreshes team display controls when an admin has them expanded.
+---------------------------------------------------------------------------------------------------
 Version: 1.3.12
   Gui:
     - The marker panel groups team status, group search and administration into separate sections. Locate and Apply name sit beside the controls they act on.
