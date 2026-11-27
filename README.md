@@ -9,7 +9,7 @@
 
 <p align="center">
   <a href="friendly-bug-map/info.json">Source version <strong>1.3.13</strong></a>
-  &nbsp;·&nbsp; Base Factorio <strong>2.1</strong>
+  &nbsp;·&nbsp; Factorio <strong>2.1</strong> (tested on <strong>2.1.25</strong>)
   &nbsp;·&nbsp; <a href="LICENSE">MIT license</a>
 </p>
 
@@ -92,9 +92,11 @@ With **2,503 tracked bugs**, the biggest improvement was on the save where two t
 | One | 0.350 ms/tick | 0.351 ms/tick |
 | Two | 1.502 ms/tick | **0.511 ms/tick** |
 
-The figures are median run averages from three 600-tick headless runs per version on each save, using base Factorio and the **Balanced** performance preset. For less frequent updates, choose **Settings → Mod settings → Map → Performance preset → Low load**.
+The figures are median run averages from three 600-tick headless runs per version on each save, using base Factorio **2.1.23** and the **Balanced** performance preset. For less frequent updates, choose **Settings → Mod settings → Map → Performance preset → Low load**.
 
-On **Factorio 2.1.23**, direct upgrades from all 20 earlier tracking builds (1.0.0 through 1.3.12) passed a second save and restart. One graphical client exercised the marker panel and rule editor on a 75-mod dedicated server. Two simultaneous clients and sustained production-server load remain untested for this build.
+On **Factorio 2.1.25**, the published **1.3.13** ZIP passed fresh-install, save-upgrade and restart checks. A dedicated server loaded 80 enabled mods including Bug Manager. One graphical client exercised the personal map toggle, group finder, admin shortcut handler and sharing-rule editor. The optional Informatron guide also passed installation and removal on a disposable save.
+
+On **Factorio 2.1.23**, direct upgrades from all 20 earlier tracking builds (1.0.0 through 1.3.12) passed a second save and restart. Two simultaneous clients and sustained production-server load remain untested for this build.
 
 </details>
 
