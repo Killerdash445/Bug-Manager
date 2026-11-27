@@ -247,16 +247,22 @@ local function sample(p, e, recent)
   local routes = routes_for(e)
   if not routes then return false end
   local output = outputs_for(routes, e, recent)
+  if not next(output) then return false end
+  local pos, surface = e.position, e.surface
   for name, o in pairs(output) do
-    local force = game.forces[name]
+    if not o.force then
+      o.force = game.forces[name]
+      o.index = o.force.index
+    end
     if p.mark and o.marker then
-      local kind = e.type == "unit-spawner" and "nest" or "other"
-      if Display.allows(Display.preferences(force), e.force.name, kind) then
-        Groups.sample(p, e, force)
+      if o.show == nil then
+        local kind = e.type == "unit-spawner" and "nest" or "other"
+        o.show = Display.allows(Display.preferences(o.force), e.force.name, kind)
       end
+      if o.show then Groups.sample(p, e, o.force, recent, pos, surface, o.index) end
     end
     if p.chart then
-      local fi, si, pos = force.index, e.surface.index, e.position
+      local fi, si = o.index, recent.surface
       if o.discover == o.refresh then
         queue_chunks(p, recent.rectangles, fi, si, pos, o.discover, "both")
       else
@@ -265,7 +271,7 @@ local function sample(p, e, recent)
       end
     end
   end
-  return next(output) ~= nil
+  return true
 end
 
 local function chart(job)
@@ -299,8 +305,20 @@ local function apply_marker(key, m)
     storage.tags[key] = nil
     return
   end
-  local source_name = Display.preferences(f).aliases[m.source] or m.source
-  Markers.update(key, m, f, e, Groups.label(m, source_name))
+  local pref = Display.preferences(f)
+  m.style.label_min = pref.label_min or 1
+  local label = Groups.label(m, pref.aliases[m.source] or m.source, m.style)
+  Markers.update(key, m, f, e, label, pref.identities and pref.identities[m.source])
+end
+
+function Tracker.relabel(force, source)
+  local pref, style = Display.preferences(force), Display.style(force)
+  for _, rec in pairs(storage.tags) do
+    if rec.force == force and (not source or source == rec.source) and rec.marker.valid and rec.species then
+      local label = Groups.label(rec, pref.aliases[rec.source] or rec.source, style)
+      Markers.set_label(rec, rec.icon, label, pref.identities and pref.identities[rec.source])
+    end
+  end
 end
 
 -- Restart marker sampling only. A chart pass already in progress must finish.
@@ -378,6 +396,15 @@ function Tracker.tick()
       p.phase = p.mark and "rank" or "done"
       p.index = 1
       if p.mark then p.group_key = next(p.groups) end
+      if p.mark and p.nests then p.phase = "reserve" end
+    elseif p.phase == "reserve" then
+      local nest = p.nests[p.index]
+      if nest then
+        Groups.reserve(p, nest)
+        p.index = p.index + 1
+      else
+        p.phase, p.index, p.nests, p.nest_heaps = "rank", 1, nil, nil
+      end
     elseif p.phase == "rank" and p.group_key then
       p.ranked = p.ranked + 1
       Groups.rank(p, p.groups[p.group_key])
@@ -408,7 +435,7 @@ function Tracker.tick()
         storage.group_centres, storage.membership = p.centres, p.membership
         storage.marker_stats = {
           bugs = p.grouped_bugs,
-          hidden = p.candidates - p.selected,
+          hidden = p.hidden_groups + p.hidden_individuals,
           hidden_groups = p.hidden_groups,
           hidden_individuals = p.hidden_individuals,
           tick = game.tick,

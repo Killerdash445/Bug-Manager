@@ -1,4 +1,15 @@
 ---------------------------------------------------------------------------------------------------
+Version: 1.3.14
+  Features:
+    - Receiving teams can reserve nest marker slots on each surface. Unused slots remain available to other groups within the existing cap.
+    - Admins can set independent minimum bug counts for icons and labels. Icon-only groups retain exact counts in the finder. Terrain sharing continues below either threshold.
+    - Source labels can have a short prefix and a custom text colour for each receiving team.
+  Optimizations:
+    - Cosmetic edits update existing labels without restarting the marker census. Nearby bugs can reuse a chart visibility check within the same tick, and individual markers skip group representative scoring.
+  Changes:
+    - Reorganised the optional Informatron guide into illustrated map controls, compact reference tables and a dedicated marker styles page.
+    - Existing teams start with both thresholds at one, zero reserved slots and their original label styles. Reopen an older marker panel once after updating.
+---------------------------------------------------------------------------------------------------
 Version: 1.3.13
   Optimizations:
     - Swarms sharing terrain with several teams skip repeated work for each receiving team. Discovery and refresh retain their own ranges and map updates keep their original order.

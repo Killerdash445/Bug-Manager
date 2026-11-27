@@ -1,6 +1,7 @@
 local Text = require("ui-text")
 local L = Text.get
 local Display = require("display")
+local StyleEditor = require("map-style-editor")
 local Rules = require("rules")
 local Tracker = require("tracker")
 local RuleEditor = require("gui")
@@ -206,6 +207,7 @@ local function refresh_options(options, force, pref, sources, style)
   end
   options.source.enabled = #sources > 0
   local source = selected(options.source)
+  StyleEditor.refresh(options, force, source, pref)
   local field = options.alias_row.alias_field
   local draft = field.tags
   local saved = pref.aliases[source] or ""
@@ -417,6 +419,7 @@ local function open(p)
     items = { L("preset-server"), L("preset-minimal"), L("preset-balanced"), L("preset-detailed") },
   }))
   options.add { type = "label", name = "settings" }.style.single_line = false
+  StyleEditor.add_limits(options)
   options.add { type = "line" }
   options.add { type = "label", caption = L("source-team"), style = "semibold_label" }
   stretch(add(options, "source", { type = "drop-down", items = {} }))
@@ -432,6 +435,7 @@ local function open(p)
   )
   alias.style.minimal_width = 70
   add(alias_row, "apply_alias", { type = "button", caption = L("apply-name") })
+  StyleEditor.add_identity(options)
   fit(p, frame)
   refresh(p, frame)
   p.opened = frame
@@ -482,8 +486,8 @@ local function sync_map_button(p)
   end
 end
 
-local function display_changed(force)
-  Tracker.display_changed(force)
+local function display_changed(force, labels_only, source)
+  if labels_only then Tracker.relabel(force, source) else Tracker.display_changed(force) end
   local teams = panel_views(force.connected_players)
   for _, mate in pairs(force.connected_players) do
     sync_map_button(mate)
@@ -516,7 +520,8 @@ function Panel.init(replace_old_panels)
     local old_button = flow and flow.fbm_quick_button
     if old_button and old_button.get_mod() == script.mod_name then old_button.destroy() end
     local frame = p.gui.screen[window]
-    if frame and (replace_old_panels or not frame.body or not frame.body.overview) then
+    if frame and (replace_old_panels or not frame.body or not frame.body.overview
+      or not frame.body.admin.options.limits) then
       frame.destroy()
     end
     Panel.sync(p)
@@ -582,6 +587,11 @@ function Panel.event(event)
       else
         RuleEditor.list(p)
       end
+    elseif (action == "apply_identity" or action == "apply_limits") and p.admin and frame.body.admin.options.visible then
+      local options = frame.body.admin.options
+      local source = action == "apply_identity" and selected(options.source) or nil
+      local change = StyleEditor.apply(p, options, source, Display.preferences(p.force), action == "apply_limits")
+      if change then display_changed(p.force, change == "labels", source) end
     elseif action == "apply_alias" and p.admin and frame.body.admin.options.visible then
       local b = frame.body.admin.options
       local field = b.alias_row.alias_field
@@ -607,7 +617,7 @@ function Panel.event(event)
         pref.aliases[source] = name ~= "" and name or nil
         field.text = name
         field.tags = { force = p.force.index, source = source, saved = name }
-        display_changed(p.force)
+        display_changed(p.force, true, source)
       else
         field.text = name
       end

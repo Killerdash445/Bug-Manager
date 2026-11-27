@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <a href="friendly-bug-map/info.json">Source version <strong>1.3.13</strong></a>
+  <a href="friendly-bug-map/info.json">Source version <strong>1.3.14</strong></a>
   &nbsp;·&nbsp; Factorio <strong>2.1</strong> (tested on <strong>2.1.25</strong>)
   &nbsp;·&nbsp; <a href="LICENSE">MIT license</a>
 </p>
@@ -57,12 +57,15 @@ A group labelled **Fox Swarm: 237 bugs** shows where those bugs were last seen t
 ### Make a busy map readable
 
 - **Name or filter a source.** Open **Expand team display settings** in the admin panel. Choose a source, enter a **Map name** and click **Apply name**. Apply a blank name to restore the team name. These choices affect everyone on the receiving team.
-- **Choose a display preset.** **Minimal** groups bugs and shows counts. **Balanced** adds source names. **Detailed** shows individual units and their types. Larger groups get priority when grouped markers reach the cap. Eligible bugs beyond the cap still contribute to discovery and refresh.
+- **Choose a display preset.** **Minimal** groups bugs and shows counts. **Balanced** adds source names. **Detailed** shows individual units and their types.
+- **Keep scouts visible and text sparse.** Set **Show bug icons from** to 1 and **Show bug labels from** to 10. A group of nine keeps its icon and exact finder count. Individual units count as one. Both thresholds default to 1 and apply only to mobile bugs.
+- **Keep nests on a crowded map.** Set **Reserved nest slots** and click **Apply marker limits**. With a cap of 32 and four reserved slots, up to four eligible nest markers get priority on each surface. Unused slots go to the largest remaining groups. The default reservation is zero. Discovery and refresh continue beyond the display limits.
+- **Distinguish sources.** Select a source and set a short prefix such as **N** and a label colour such as `#FFD166`. Click **Apply label style**. Clear the fields to restore the defaults. Each receiving team has its own styles.
 - **Narrow one rule.** Open **Advanced filters** and enable the relevant override to choose creatures or surfaces for that rule. You can include modded units, exclude a soldier prototype, or skip space platforms and sandbox surfaces. For nest icons, enable both spawner tracking in the rule or map defaults and **Show tracked nests** for the receiving team.
 
 ## Multiplayer and upgrades
 
-Install **Bug Manager** from Factorio’s mod browser and use matching game and mod versions on the server and joining clients. **Base Factorio 2.1 is the only requirement.** With optional **Informatron 0.5.0 or later**, press **I** (default) and select **Bug Manager** for illustrated help. [Preview the in-game guide](docs/images/informatron-guide.png).
+Install **Bug Manager** from Factorio’s mod browser and use matching game and mod versions on the server and joining clients. **Base Factorio 2.1 is the only requirement.** With optional **Informatron 0.5.0 or later**, press **I** (default) and select **Bug Manager**. Open **My map** for the toolbar icons or **Marker styles** for a worked example of thresholds, nest slots and colour. [Preview the in-game guide](docs/images/informatron-guide.png).
 
 <details>
 <summary><strong>Missing a swarm or seeing an old position?</strong></summary>
@@ -83,20 +86,19 @@ To pause tracking for everyone and remove Bug Manager’s markers, use `/bug-map
 </details>
 
 <details>
-<summary><strong>Performance and testing for 1.3.13</strong></summary>
+<summary><strong>Performance and testing for 1.3.14</strong></summary>
 
-With **2,503 tracked bugs**, the biggest improvement was on the save where two teams received terrain from the same swarm.
+With 2,503 tracked bugs, the largest saving was on the map where two teams received grouped markers. For less frequent updates, choose **Settings → Mod settings → Map → Performance preset → Low load**.
 
-| Receiving teams | 1.3.12 script time | 1.3.13 script time |
-| --- | ---: | ---: |
-| One | 0.350 ms/tick | 0.351 ms/tick |
-| Two | 1.502 ms/tick | **0.511 ms/tick** |
+| Marker mode | Receiving teams | 1.3.13 | 1.3.14 |
+| --- | ---: | ---: | ---: |
+| Grouped | 1 | 0.366 ms/tick | 0.241 ms/tick |
+| Grouped | 2 | 0.475 ms/tick | 0.260 ms/tick |
+| Individual | 2 | 0.398 ms/tick | 0.238 ms/tick |
 
-The figures are median run averages from three 600-tick headless runs per version on each save, using base Factorio **2.1.23** and the **Balanced** performance preset. For less frequent updates, choose **Settings → Mod settings → Map → Performance preset → Low load**.
+Each value is the median of three alternating 600-tick run averages on the same save, using base Factorio **2.1.25** and Bug Manager. These measure script update time. Frame rate and sustained performance on a live modded server can differ.
 
-On **Factorio 2.1.25**, the published **1.3.13** ZIP passed fresh-install, save-upgrade and restart checks. A dedicated server loaded 80 enabled mods including Bug Manager. One graphical client exercised the personal map toggle, group finder, admin shortcut handler and sharing-rule editor. The optional Informatron guide also passed installation and removal on a disposable save.
-
-On **Factorio 2.1.23**, direct upgrades from all 20 earlier tracking builds (1.0.0 through 1.3.12) passed a second save and restart. Two simultaneous clients and sustained production-server load remain untested for this build.
+All 21 earlier tracking builds upgraded and restarted on disposable saves. A dedicated server loaded 80 enabled mods including Bug Manager. One graphical client exercised the personal map controls, admin marker settings and the seven-page Informatron guide. Simultaneous graphical clients were outside this test.
 
 </details>
 

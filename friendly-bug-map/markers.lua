@@ -41,7 +41,20 @@ function Markers.init()
   end
 end
 
-function Markers.update(key, m, force, entity, label)
+function Markers.set_label(rec, icon, label, identity)
+  local prefix, colour = identity and identity.prefix, identity and identity.colour
+  if rec.icon == icon and rec.prefix == prefix and rec.colour == colour and Text.same(rec.label, label) then return end
+  local text = "[img=entity/" .. icon .. "]"
+  if label ~= "" then
+    local detail = prefix and { "", prefix, " · ", label } or label
+    if colour then detail = { "", "[color=" .. colour .. "]", detail, "[/color]" } end
+    text = { "", text, " ", detail }
+  end
+  rec.marker.text = text
+  rec.icon, rec.label, rec.prefix, rec.colour = icon, label, prefix, colour
+end
+
+function Markers.update(key, m, force, entity, label, identity)
   local rec = storage.tags[key]
   local pos = m.pos
   if rec and rec.marker.valid then
@@ -50,22 +63,13 @@ function Markers.update(key, m, force, entity, label)
       rec.marker.target = pos
       rec.position = pos
     end
-    if rec.icon == entity.name and Text.same(rec.label, label) then
-      rec.representative = m.representative
-      return
-    end
-  end
-  local text = "[img=entity/" .. entity.name .. "]"
-  if label ~= "" then text = { "", text, " ", label } end
-  if rec and rec.marker.valid then
-    rec.marker.text = text
   else
     local audience = storage.marker_audiences[force.index] or Markers.audience(force)
     storage.marker_audiences[force.index] = audience
     local marker = rendering.draw_text {
       surface = entity.surface,
       target = pos,
-      text = text,
+      text = "",
       render_mode = "chart",
       use_rich_text = true,
       scale_with_zoom = true,
@@ -85,7 +89,8 @@ function Markers.update(key, m, force, entity, label)
     }
     storage.tags[key] = rec
   end
-  rec.icon, rec.label, rec.representative = entity.name, label, m.representative
+  rec.species, rec.representative = m.species, m.representative
+  Markers.set_label(rec, entity.name, label, identity)
 end
 
 return Markers

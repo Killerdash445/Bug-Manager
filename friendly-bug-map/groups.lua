@@ -19,7 +19,7 @@ end
 function Groups.begin(p)
   p.groups, p.grid, p.members, p.membership, p.heaps = {}, {}, {}, {}, {}
   p.centres = {}
-  p.candidates, p.grouped_bugs, p.selected = 0, 0, 0
+  p.candidates, p.grouped_bugs = 0, 0
   p.radius = Rules.option("cell")
   p.styles = {}
   p.hidden_groups, p.hidden_individuals = 0, 0
@@ -71,22 +71,35 @@ local function nearest(p, part, e, pos, old)
   return key
 end
 
-function Groups.sample(p, e, f)
-  local pos = e.position
-  if not f.is_chunk_charted(e.surface, { math.floor(pos.x / 32), math.floor(pos.y / 32) }) then
-    return
+function Groups.sample(p, e, f, recent, pos, surface, index)
+  local style = p.styles[index]
+  if not style then
+    style = Display.style(f)
+    p.styles[index] = style
   end
-  local bucket = f.index .. "/" .. e.surface.index
-  local kind = e.type == "unit" and "bug" or e.type == "unit-spawner" and "nest" or "turret"
-  local part = table.concat({ bucket, e.force.index, kind }, "/")
+  if not style.group and style.icon_min > 1 and e.type == "unit" then return end
+  local x, y = math.floor(pos.x / 32), math.floor(pos.y / 32)
+  local last = recent[index]
+  if not last then
+    last = {}
+    recent[index] = last
+  end
+  if last.surface ~= recent.surface or last.x ~= x or last.y ~= y then
+    last.surface, last.x, last.y = recent.surface, x, y
+    last.charted = f.is_chunk_charted(surface, { x, y })
+  end
+  if not last.charted then return end
+  if last.routes ~= recent.routes or last.prototype ~= recent.prototype or last.partition_surface ~= recent.surface then
+    local entity_type = e.type
+    last.kind = entity_type == "unit" and "bug" or entity_type == "unit-spawner" and "nest" or "turret"
+    last.bucket = index .. "/" .. recent.surface
+    last.part = last.bucket .. "/" .. e.force.index .. "/" .. last.kind
+    last.routes, last.prototype, last.partition_surface = recent.routes, recent.prototype, recent.surface
+  end
+  local bucket, kind, part = last.bucket, last.kind, last.part
   local id = e.unit_number
   local member = part .. "/" .. id
   local key = member
-  local style = p.styles[f.index]
-  if not style then
-    style = Display.style(f)
-    p.styles[f.index] = style
-  end
   if style.group then
     key = nearest(p, part, e, pos, storage.membership and storage.membership[member])
     p.membership[member] = key
@@ -112,27 +125,31 @@ function Groups.sample(p, e, f)
     }
     p.groups[key] = m
     p.candidates = p.candidates + 1
+    if kind == "nest" and style.reserve > 0 then
+      p.nests = p.nests or {}
+      p.nests[#p.nests + 1] = m
+    end
   end
   m.sum_x, m.sum_y = m.sum_x + pos.x, m.sum_y + pos.y
   m.count = m.count + 1
   m.priority = math.min(m.priority, id)
   if m.species ~= e.name then m.species = "Mixed" end
-  p.members[#p.members + 1] = { group = m, entity = e, pos = pos, id = id }
+  if style.group then
+    p.members[#p.members + 1] = { group = m, entity = e, pos = pos, id = id }
+  else
+    m.entity, m.pos, m.representative = e, pos, id
+    p.members[#p.members + 1] = m
+  end
 end
 
 -- Worst selected group at the heap root. Maintain the top cap incrementally.
 local function worse(a, b)
+  if a.reserved ~= b.reserved then return b.reserved == true end
   return a.count < b.count or (a.count == b.count and a.priority > b.priority)
 end
 
-function Groups.rank(p, m)
-  if m.group then p.centres[m.key] = { x = m.sum_x / m.count, y = m.sum_y / m.count } end
-  local heap = p.heaps[m.bucket]
-  if not heap then
-    heap = {}
-    p.heaps[m.bucket] = heap
-  end
-  if #heap < m.style.cap then
+local function keep_best(heap, limit, m)
+  if #heap < limit then
     local i = #heap + 1
     while i > 1 do
       local parent = math.floor(i / 2)
@@ -141,16 +158,10 @@ function Groups.rank(p, m)
       i = parent
     end
     heap[i] = m
-    p.selected = p.selected + 1
+    return nil
   else
-    if m.group then
-      p.hidden_groups = p.hidden_groups + 1
-    else
-      p.hidden_individuals = p.hidden_individuals + 1
-    end
-    p.hidden_by_bucket[m.bucket] = (p.hidden_by_bucket[m.bucket] or 0) + 1
-    if not worse(heap[1], m) then return end
-    p.wanted[heap[1].key] = nil
+    local removed = heap[1]
+    if not worse(removed, m) then return m end
     local i = 1
     while 2 * i <= #heap do
       local child = 2 * i
@@ -160,11 +171,42 @@ function Groups.rank(p, m)
       i = child
     end
     heap[i] = m
+    return removed
+  end
+end
+
+function Groups.reserve(p, m)
+  p.nest_heaps = p.nest_heaps or {}
+  local heap = p.nest_heaps[m.bucket] or {}
+  p.nest_heaps[m.bucket] = heap
+  -- Every entry in this heap is a nest. Compare candidates on equal terms.
+  m.reserved = true
+  local removed = keep_best(heap, m.style.reserve, m)
+  if removed then removed.reserved = nil end
+end
+
+function Groups.rank(p, m)
+  if m.group then p.centres[m.key] = { x = m.sum_x / m.count, y = m.sum_y / m.count } end
+  if m.kind == "bug" and m.count < m.style.icon_min then return end
+  local heap = p.heaps[m.bucket] or {}
+  p.heaps[m.bucket] = heap
+  local removed = keep_best(heap, m.style.cap, m)
+  if removed then
+    if m.group then p.hidden_groups = p.hidden_groups + 1 else p.hidden_individuals = p.hidden_individuals + 1 end
+    p.hidden_by_bucket[m.bucket] = (p.hidden_by_bucket[m.bucket] or 0) + 1
+    if removed == m then return end
+    p.wanted[removed.key] = nil
   end
   p.wanted[m.key] = m
 end
 
 function Groups.represent(p, v)
+  if v.group == false then
+    if p.wanted[v.key] then
+      if v.entity.valid then p.order[#p.order + 1] = v.key else v.entity = nil end
+    end
+    return
+  end
   local m = v.group
   if not p.wanted[m.key] or not v.entity.valid then return end
   local delta_x = v.pos.x - m.sum_x / m.count
@@ -178,16 +220,17 @@ function Groups.represent(p, v)
   end
 end
 
-function Groups.label(m, source_name)
+function Groups.label(m, source_name, style)
+  if m.kind == "bug" and m.count < style.label_min then return "" end
   local parts = {}
-  if m.style.count then
+  if style.count then
     parts[#parts + 1] = L("count-" .. m.kind, m.count)
   elseif m.kind ~= "bug" then
     parts[#parts + 1] = L("kind-" .. m.kind)
   end
-  if m.style.kind then parts[#parts + 1] = m.species == "Mixed" and L("mixed") or m.species end
+  if style.kind then parts[#parts + 1] = m.species == "Mixed" and L("mixed") or m.species end
   local detail = Text.join(parts, " · ")
-  if m.style.team then
+  if style.team then
     return detail ~= "" and L("map-label", source_name, detail) or source_name
   end
   return detail
